@@ -17,7 +17,32 @@ spec:
     metadata:
       labels:
         app: {{ .Release.Name }}-askapi
+      {{- with .Values.askapi.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
+      {{- if or .Values.askapi.imagePullSecrets .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+        {{- end }}
+        {{- range .Values.askapi.imagePullSecrets }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.askapi.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.askapi.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.askapi.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: askapi
           image: "{{ .Values.askapi.image.repository }}:{{ .Values.askapi.image.tag }}"
@@ -33,4 +58,16 @@ spec:
             {{- end }}
           resources:
             {{- toYaml .Values.askapi.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.askapi.service.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.askapi.service.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 30
 {{- end }}

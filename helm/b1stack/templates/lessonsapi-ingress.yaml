@@ -9,7 +9,7 @@ metadata:
   annotations:
     {{- toYaml .Values.lessonsapi.ingress.annotations | nindent 4 }}
 spec:
-  ingressClassName: nginx
+  ingressClassName: {{ .Values.lessonsapi.ingress.className | default "nginx" }}
   {{- if .Values.lessonsapi.ingress.tls }}
   tls:
     - hosts:
