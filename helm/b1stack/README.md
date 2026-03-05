@@ -72,7 +72,7 @@ kubectl --context hetzner-ledo -n b1-test exec -it \
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `global.imageRegistry` | `registry.bitnami.com` | Override to use Bitnami's own registry (no Docker Hub rate limits). Set to `""` to use Docker Hub. |
+| `global.imageRegistry` | `""` (Docker Hub) | Override to pull from a custom registry / pull-through cache. Leave empty for Docker Hub. Note: `registry.bitnami.com` is a commercial registry — not suitable here. |
 | `global.imagePullSecrets` | `[]` | Secrets added to every pod's `imagePullSecrets` |
 | `global.storageClass` | `""` | Storage class for MySQL PVC. Empty = cluster default (`gp2` on EKS, `standard` on GKE, `hcloud-volumes` on Hetzner). |
 
@@ -316,13 +316,12 @@ api:
 
 ## Docker Hub rate limits
 
-The Bitnami MySQL sub-chart pulls from Docker Hub by default. To avoid rate limit errors, `global.imageRegistry` is set to `registry.bitnami.com` (Bitnami's own registry, no rate limits) out of the box.
+The Bitnami MySQL sub-chart pulls from Docker Hub by default. `global.imageRegistry` is empty by default — images come from Docker Hub.
 
-To revert to Docker Hub (not recommended for production):
-```yaml
-global:
-  imageRegistry: ""
-```
+To avoid Docker Hub rate limits in production, configure a pull-through cache at the cluster level:
+- **k3s**: Add a containerd mirror in `/etc/rancher/k3s/registries.yaml`
+- **EKS**: Use ECR pull-through cache
+- **GKE**: Use Artifact Registry remote repositories
 
 ---
 

@@ -58,15 +58,17 @@ spec:
             {{- end }}
           resources:
             {{- toYaml .Values.b1app.resources | nindent 12 }}
+          # TCP probe: Next.js SSR on "/" can take >1s to respond (triggers metadata
+          # warnings, data fetches, etc.) causing httpGet probes to time out.
+          # TCP check verifies the port is bound and accepting connections — sufficient
+          # for liveness/readiness without triggering a full page render.
           readinessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: {{ .Values.b1app.service.port }}
             initialDelaySeconds: 15
             periodSeconds: 10
           livenessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: {{ .Values.b1app.service.port }}
             initialDelaySeconds: 30
             periodSeconds: 30
