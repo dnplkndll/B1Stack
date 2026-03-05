@@ -1,0 +1,78 @@
+name: Update Submodules
+
+on:
+  schedule:
+    # Every Monday 05:00 UTC — runs before build-images.yml at 06:00.
+    # Opens a PR; build-images.yml fires when that PR is merged to main.
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+# Only one submodule-update run at a time; skip if one is already queued.
+concurrency:
+  group: update-submodules
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Update submodules to upstream main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # Use PAT so the resulting PR can trigger build-images.yml on merge.
+          # GITHUB_TOKEN-created PRs do NOT trigger other workflow runs.
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Update submodules to upstream HEAD
+        id: update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git submodule update --remote --merge
+          git add services/
+
+          if git diff --cached --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No submodule changes."
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+
+            # Build changelog of what moved
+            NOTES=""
+            for svc in Api B1Admin B1App LessonsApi AskApi; do
+              OLD=$(git diff --cached services/$svc | grep "^-Subproject" | awk '{print substr($3,1,7)}')
+              NEW=$(git diff --cached services/$svc | grep "^+Subproject" | awk '{print substr($3,1,7)}')
+              if [ -n "$OLD" ] && [ -n "$NEW" ]; then
+                NOTES="${NOTES}\n- **${svc}**: \`${OLD}\` → \`${NEW}\`"
+              fi
+            done
+            echo "notes<<EOF" >> $GITHUB_OUTPUT
+            echo -e "$NOTES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create PR
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          # Must use PAT — GITHUB_TOKEN PRs don't trigger build-images.yml on merge.
+          # Create a classic PAT with repo scope and add it as a repository secret named GH_PAT.
+          token: ${{ secrets.GH_PAT }}
+          branch: chore/update-submodules
+          commit-message: "chore: update submodules to upstream main"
+          title: "chore: weekly submodule update"
+          body: |
+            Automated weekly update of ChurchApps submodules to upstream `main`.
+
+            ## Changes
+            ${{ steps.update.outputs.notes }}
+
+            Merging this PR will trigger `build-images.yml` to publish new `:YYYYMMDD` tagged images.
+          labels: dependencies
+          delete-branch: true
