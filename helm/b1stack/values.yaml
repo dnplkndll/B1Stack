@@ -25,11 +25,13 @@ mysql:
       FLUSH PRIVILEGES;
 
 # Global settings shared across all sub-charts (including Bitnami MySQL).
-# imageRegistry: Override to pull Bitnami images from their own registry instead of Docker Hub,
-#   avoiding Docker Hub pull rate limits.
-#   Use "registry.bitnami.com" (no rate limits) instead of the default "docker.io".
+# imageRegistry: Override to pull all images from a custom registry (e.g. a pull-through cache).
+#   Leave empty to use Docker Hub (default for Bitnami charts).
+#   Note: registry.bitnami.com is Bitnami's commercial/authenticated registry — not suitable here.
+#   To avoid Docker Hub rate limits in production, configure a pull-through cache at the cluster level
+#   (k3s containerd mirrors, ECR pull-through cache, or GCP Artifact Registry remote repos).
 global:
-  imageRegistry: "registry.bitnami.com"
+  imageRegistry: ""
   imagePullSecrets: []
   # storageClass: "" uses the cluster default (gp2 on EKS, standard on GKE, hcloud-volumes on Hetzner).
   # Override per-environment in values.<env>.yaml.
