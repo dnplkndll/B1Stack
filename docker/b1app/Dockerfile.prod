@@ -16,12 +16,12 @@ RUN npm run build
 
 FROM node:22-alpine AS runner
 WORKDIR /app
-# git required by postinstall script (same reason as builder stage)
-RUN apk add --no-cache git
 ARG NEXT_STAGE=staging
 ENV NODE_ENV=production NEXT_STAGE=$NEXT_STAGE
 COPY services/B1App/package.json services/B1App/package-lock.json ./
-RUN npm ci --omit=dev
+# --ignore-scripts: postinstall calls copyfiles (devDep) to copy locales/CSS into public/.
+# Those files are already present in the .next build copied from builder — skip here.
+RUN npm ci --omit=dev --ignore-scripts
 COPY services/B1App/next.config.mjs ./
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
