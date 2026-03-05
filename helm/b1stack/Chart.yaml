@@ -7,6 +7,6 @@ type: application
 kubeVersion: ">=1.24.0-0"
 dependencies:
   - name: mysql
-    version: "11.x.x"
+    version: "12.x.x"
     repository: "https://charts.bitnami.com/bitnami"
     condition: mysql.enabled
