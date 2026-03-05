@@ -1,0 +1,12 @@
+apiVersion: v2
+name: b1stack
+description: Umbrella Helm chart for the ChurchApps B1 product suite
+version: "0.1.0"
+appVersion: "latest"
+type: application
+kubeVersion: ">=1.24.0-0"
+dependencies:
+  - name: mysql
+    version: "11.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: mysql.enabled

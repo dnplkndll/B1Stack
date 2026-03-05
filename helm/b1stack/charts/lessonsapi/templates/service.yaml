@@ -1,0 +1,16 @@
+{{- if .Values.lessonsapi.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-lessonsapi
+  labels:
+    app: {{ .Release.Name }}-lessonsapi
+spec:
+  type: {{ .Values.lessonsapi.service.type }}
+  selector:
+    app: {{ .Release.Name }}-lessonsapi
+  ports:
+    - name: http
+      port: {{ .Values.lessonsapi.service.port }}
+      targetPort: {{ .Values.lessonsapi.service.port }}
+{{- end }}

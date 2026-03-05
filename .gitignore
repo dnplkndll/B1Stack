@@ -1,0 +1,6 @@
+.env
+mysql/data/
+**/node_modules/
+**/dist/
+**/.next/
+.DS_Store

@@ -1,0 +1,53 @@
+# Production overrides for B1Stack Helm chart
+# Usage: helm upgrade --install b1stack helm/b1stack -f helm/b1stack/values.prod.yaml
+# NOTE: Use ExternalSecrets operator or sealed-secrets for all secret values in production.
+
+api:
+  replicaCount: 2
+  ingress:
+    enabled: true
+    hostname: api.b1stack.example.com
+    tls: true
+  env:
+    ENVIRONMENT: prod
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+b1admin:
+  replicaCount: 2
+  ingress:
+    enabled: true
+    hostname: admin.b1stack.example.com
+    tls: true
+  env:
+    REACT_APP_STAGE: prod
+
+b1app:
+  replicaCount: 2
+  ingress:
+    enabled: true
+    hostname: b1stack.example.com
+    tls: true
+  env:
+    NEXT_STAGE: prod
+
+lessonsapi:
+  enabled: true
+  replicaCount: 2
+  ingress:
+    enabled: true
+    hostname: lessons-api.b1stack.example.com
+    tls: true
+
+askapi:
+  enabled: true
+  replicaCount: 1
+  ingress:
+    enabled: true
+    hostname: ask-api.b1stack.example.com
+    tls: true

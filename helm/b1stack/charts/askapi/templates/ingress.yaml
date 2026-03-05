@@ -1,0 +1,28 @@
+{{- if and .Values.askapi.enabled .Values.askapi.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-askapi
+  labels:
+    app: {{ .Release.Name }}-askapi
+  annotations:
+    {{- toYaml .Values.askapi.ingress.annotations | nindent 4 }}
+spec:
+  {{- if .Values.askapi.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ .Values.askapi.ingress.hostname }}
+      secretName: {{ .Release.Name }}-askapi-tls
+  {{- end }}
+  rules:
+    - host: {{ .Values.askapi.ingress.hostname }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-askapi
+                port:
+                  number: {{ .Values.askapi.service.port }}
+{{- end }}

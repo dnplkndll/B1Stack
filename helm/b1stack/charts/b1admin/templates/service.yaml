@@ -1,0 +1,16 @@
+{{- if .Values.b1admin.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-b1admin
+  labels:
+    app: {{ .Release.Name }}-b1admin
+spec:
+  type: {{ .Values.b1admin.service.type }}
+  selector:
+    app: {{ .Release.Name }}-b1admin
+  ports:
+    - name: http
+      port: {{ .Values.b1admin.service.port }}
+      targetPort: {{ .Values.b1admin.service.port }}
+{{- end }}
