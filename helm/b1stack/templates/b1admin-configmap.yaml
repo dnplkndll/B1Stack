@@ -1,0 +1,13 @@
+{{- if .Values.b1admin.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-b1admin-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-b1admin
+data:
+  {{- range $k, $v := .Values.b1admin.env }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}
+{{- end }}

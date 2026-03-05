@@ -79,7 +79,7 @@ b1admin:
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
-    port: 3101
+    port: 80  # nginx in production image; dev image uses 3101
   ingress:
     enabled: false
     hostname: admin.example.com

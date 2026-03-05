@@ -1,0 +1,130 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/dnplkndll/b1stack
+
+jobs:
+  build-api:
+    name: Build API
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push API
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/api/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/api:latest
+            ${{ env.IMAGE_PREFIX }}/api:${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+  build-b1admin:
+    name: Build B1Admin
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push B1Admin
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/b1admin/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/b1admin:latest
+            ${{ env.IMAGE_PREFIX }}/b1admin:${{ github.sha }}
+          cache-from: type=gha,scope=b1admin
+          cache-to: type=gha,mode=max,scope=b1admin
+          build-args: |
+            REACT_APP_STAGE=staging
+            REACT_APP_MEMBERSHIP_API=https://api.b1-test.hz.ledoweb.com/membership
+            REACT_APP_ATTENDANCE_API=https://api.b1-test.hz.ledoweb.com/attendance
+            REACT_APP_GIVING_API=https://api.b1-test.hz.ledoweb.com/giving
+            REACT_APP_REPORTING_API=https://api.b1-test.hz.ledoweb.com/reporting
+            REACT_APP_MESSAGING_API=https://api.b1-test.hz.ledoweb.com/messaging
+            REACT_APP_MESSAGING_API_SOCKET=wss://api.b1-test.hz.ledoweb.com
+            REACT_APP_CONTENT_API=https://api.b1-test.hz.ledoweb.com/content
+            REACT_APP_DOING_API=https://api.b1-test.hz.ledoweb.com/doing
+            REACT_APP_LESSONS_API=https://api.b1-test.hz.ledoweb.com/lessons
+            REACT_APP_CONTENT_ROOT=https://b1-test.hz.ledoweb.com
+            REACT_APP_B1_ROOT=https://b1-test.hz.ledoweb.com
+            REACT_APP_B1ADMIN_ROOT=https://admin.b1-test.hz.ledoweb.com
+
+  build-b1app:
+    name: Build B1App
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push B1App
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/b1app/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/b1app:latest
+            ${{ env.IMAGE_PREFIX }}/b1app:${{ github.sha }}
+          cache-from: type=gha,scope=b1app
+          cache-to: type=gha,mode=max,scope=b1app
+          build-args: |
+            NEXT_STAGE=staging

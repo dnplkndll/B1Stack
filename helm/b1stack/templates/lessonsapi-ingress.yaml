@@ -1,0 +1,30 @@
+{{- if and .Values.lessonsapi.enabled .Values.lessonsapi.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-lessonsapi
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-lessonsapi
+  annotations:
+    {{- toYaml .Values.lessonsapi.ingress.annotations | nindent 4 }}
+spec:
+  ingressClassName: nginx
+  {{- if .Values.lessonsapi.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ .Values.lessonsapi.ingress.hostname }}
+      secretName: {{ .Release.Name }}-lessonsapi-tls
+  {{- end }}
+  rules:
+    - host: {{ .Values.lessonsapi.ingress.hostname }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-lessonsapi
+                port:
+                  number: {{ .Values.lessonsapi.service.port }}
+{{- end }}

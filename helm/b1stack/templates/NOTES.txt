@@ -1,0 +1,41 @@
+B1Stack deployed successfully!
+
+== Access URLs ==
+{{- if .Values.api.ingress.enabled }}
+  API:     {{ if .Values.api.ingress.tls }}https{{ else }}http{{ end }}://{{ .Values.api.ingress.hostname }}
+{{- end }}
+{{- if .Values.b1admin.ingress.enabled }}
+  B1Admin: {{ if .Values.b1admin.ingress.tls }}https{{ else }}http{{ end }}://{{ .Values.b1admin.ingress.hostname }}
+{{- end }}
+{{- if .Values.b1app.ingress.enabled }}
+  B1App:   {{ if .Values.b1app.ingress.tls }}https{{ else }}http{{ end }}://{{ .Values.b1app.ingress.hostname }}
+{{- end }}
+
+== First-time setup ==
+After initial deploy, run database migrations:
+
+  kubectl -n {{ .Release.Namespace }} exec -it \
+    $(kubectl -n {{ .Release.Namespace }} get pod -l app={{ .Release.Name }}-api \
+      -o jsonpath='{.items[0].metadata.name}') \
+    -- npm run initdb
+
+== Verify deployment ==
+  kubectl -n {{ .Release.Namespace }} get pods
+  curl https://{{ .Values.api.ingress.hostname }}/health
+
+== TLS certificates ==
+  kubectl -n {{ .Release.Namespace }} get certificates
+
+  Switch to letsencrypt-prod after staging certs are validated:
+    helm upgrade {{ .Release.Name }} ... \
+      --set 'api.ingress.annotations.cert-manager\.io/cluster-issuer=letsencrypt-prod' \
+      --set 'b1admin.ingress.annotations.cert-manager\.io/cluster-issuer=letsencrypt-prod' \
+      --set 'b1app.ingress.annotations.cert-manager\.io/cluster-issuer=letsencrypt-prod'
+  Then delete the old staging secrets to force renewal:
+    kubectl -n {{ .Release.Namespace }} delete secret \
+      {{ .Release.Name }}-api-tls {{ .Release.Name }}-b1admin-tls {{ .Release.Name }}-b1app-tls
+
+== Known limitations ==
+  - WebSocket port 8087 is not exposed via Ingress (requires TCP ConfigMap on ingress-nginx controller)
+  - B1App uses NEXT_STAGE=staging (external *.staging.churchapps.org APIs)
+  - Secrets are passed via --set flags; use ExternalSecrets operator for production

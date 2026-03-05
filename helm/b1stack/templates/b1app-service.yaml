@@ -1,0 +1,17 @@
+{{- if .Values.b1app.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-b1app
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-b1app
+spec:
+  type: {{ .Values.b1app.service.type }}
+  selector:
+    app: {{ .Release.Name }}-b1app
+  ports:
+    - name: http
+      port: {{ .Values.b1app.service.port }}
+      targetPort: {{ .Values.b1app.service.port }}
+{{- end }}

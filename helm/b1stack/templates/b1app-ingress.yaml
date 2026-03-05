@@ -1,0 +1,30 @@
+{{- if and .Values.b1app.enabled .Values.b1app.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-b1app
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-b1app
+  annotations:
+    {{- toYaml .Values.b1app.ingress.annotations | nindent 4 }}
+spec:
+  ingressClassName: nginx
+  {{- if .Values.b1app.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ .Values.b1app.ingress.hostname }}
+      secretName: {{ .Release.Name }}-b1app-tls
+  {{- end }}
+  rules:
+    - host: {{ .Values.b1app.ingress.hostname }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-b1app
+                port:
+                  number: {{ .Values.b1app.service.port }}
+{{- end }}

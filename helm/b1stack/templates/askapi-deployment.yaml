@@ -1,0 +1,34 @@
+{{- if .Values.askapi.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-askapi
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-askapi
+spec:
+  replicas: {{ .Values.askapi.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-askapi
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-askapi
+    spec:
+      containers:
+        - name: askapi
+          image: "{{ .Values.askapi.image.repository }}:{{ .Values.askapi.image.tag }}"
+          imagePullPolicy: {{ .Values.askapi.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.askapi.service.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-askapi-config
+            {{- if .Values.askapi.secrets }}
+            - secretRef:
+                name: {{ .Release.Name }}-askapi-secrets
+            {{- end }}
+          resources:
+            {{- toYaml .Values.askapi.resources | nindent 12 }}
+{{- end }}

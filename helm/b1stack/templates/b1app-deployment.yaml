@@ -1,0 +1,46 @@
+{{- if .Values.b1app.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-b1app
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-b1app
+spec:
+  replicas: {{ .Values.b1app.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-b1app
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-b1app
+    spec:
+      containers:
+        - name: b1app
+          image: "{{ .Values.b1app.image.repository }}:{{ .Values.b1app.image.tag }}"
+          imagePullPolicy: {{ .Values.b1app.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.b1app.service.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-b1app-config
+            {{- if .Values.b1app.secrets }}
+            - secretRef:
+                name: {{ .Release.Name }}-b1app-secrets
+            {{- end }}
+          resources:
+            {{- toYaml .Values.b1app.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.b1app.service.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.b1app.service.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+{{- end }}
