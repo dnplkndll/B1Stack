@@ -2,9 +2,15 @@ name: Update Submodules
 
 on:
   schedule:
-    # Every Monday 05:00 UTC — runs before build-images.yml at 06:00
+    # Every Monday 05:00 UTC — runs before build-images.yml at 06:00.
+    # Opens a PR; build-images.yml fires when that PR is merged to main.
     - cron: '0 5 * * 1'
   workflow_dispatch:
+
+# Only one submodule-update run at a time; skip if one is already queued.
+concurrency:
+  group: update-submodules
+  cancel-in-progress: false
 
 jobs:
   update:
@@ -18,7 +24,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Use PAT so the resulting PR can trigger build-images.yml on merge.
+          # GITHUB_TOKEN-created PRs do NOT trigger other workflow runs.
+          token: ${{ secrets.GH_PAT }}
 
       - name: Update submodules to upstream HEAD
         id: update
@@ -53,7 +61,9 @@ jobs:
         if: steps.update.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Must use PAT — GITHUB_TOKEN PRs don't trigger build-images.yml on merge.
+          # Create a classic PAT with repo scope and add it as a repository secret named GH_PAT.
+          token: ${{ secrets.GH_PAT }}
           branch: chore/update-submodules
           commit-message: "chore: update submodules to upstream main"
           title: "chore: weekly submodule update"

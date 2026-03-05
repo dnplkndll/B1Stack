@@ -5,9 +5,15 @@ on:
     branches:
       - main
   schedule:
-    # Weekly build every Monday 06:00 UTC — picks up upstream submodule changes
+    # Weekly build every Monday 06:00 UTC — rebuilds images pinned to current submodule SHAs in main.
+    # To pull in new upstream commits, merge the PR from update-submodules.yml first.
     - cron: '0 6 * * 1'
   workflow_dispatch:
+
+# Prevent concurrent builds on the same ref; cancel any in-progress run.
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
@@ -20,8 +26,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    outputs:
-      date_tag: ${{ steps.meta.outputs.date_tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -91,6 +95,9 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push B1Admin
+        # NOTE: B1Admin REACT_APP_* vars are baked into the JS bundle at build time (Vite define).
+        # These images are therefore environment-specific (b1-test URLs).
+        # For a different environment, rebuild with different REACT_APP_* build-args.
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -206,6 +213,9 @@ jobs:
             ```
 
             Also tagged `:${{ steps.tag.outputs.sha_tag }}` and `:latest`.
+
+            > **Note:** B1Admin images have b1-test API URLs baked in at build time.
+            > To deploy to a different environment, rebuild with the appropriate `REACT_APP_*` build-args.
 
             ## Upstream submodule commits
 
