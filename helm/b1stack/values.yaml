@@ -1,5 +1,8 @@
 # B1Stack Helm umbrella chart values
-# Bitnami MySQL sub-chart
+
+# Bitnami MySQL sub-chart (bundled database)
+# Set mysql.enabled: false to use an external MySQL / managed DB (Cloud SQL, RDS, etc.)
+# and supply connection strings via api.secrets.*_CONNECTION_STRING at deploy time.
 mysql:
   enabled: true
   auth:
@@ -21,10 +24,15 @@ mysql:
       GRANT ALL PRIVILEGES ON *.* TO 'b1stack'@'%';
       FLUSH PRIVILEGES;
 
-# Global settings shared across sub-charts
+# Global settings shared across all sub-charts (including Bitnami MySQL).
+# imageRegistry: Override to pull Bitnami images from their own registry instead of Docker Hub,
+#   avoiding Docker Hub pull rate limits.
+#   Use "registry.bitnami.com" (no rate limits) instead of the default "docker.io".
 global:
-  imageRegistry: ""
+  imageRegistry: "registry.bitnami.com"
   imagePullSecrets: []
+  # storageClass: "" uses the cluster default (gp2 on EKS, standard on GKE, hcloud-volumes on Hetzner).
+  # Override per-environment in values.<env>.yaml.
   storageClass: ""
 
 # ChurchApps API
@@ -41,6 +49,8 @@ api:
     socketPort: 8087
   ingress:
     enabled: false
+    # className: ingress controller class — "nginx" (default), "gce" (GKE), "alb" (EKS + AWS Load Balancer Controller)
+    className: ""
     hostname: api.example.com
     tls: false
     annotations: {}
@@ -75,15 +85,40 @@ api:
     #         value: 1
     #         periodSeconds: 120
   env:
-    ENVIRONMENT: production
-    CORS_ORIGIN: "*"
-    FILE_STORE: disk
-    DELIVERY_PROVIDER: local
+    # Core
+    ENVIRONMENT: production        # dev | staging | prod — selects config/<env>.json defaults
+    CORS_ORIGIN: "*"               # Restrict to your domains in production, e.g. "https://example.com"
+
+    # File storage — "disk" stores files on pod local disk (ephemeral!); "S3" uses AWS S3 / GCS via S3-compat API
+    FILE_STORE: disk               # disk | S3
+    DELIVERY_PROVIDER: local       # local | aws
+    # CONTENT_ROOT: ""             # Public base URL for uploaded files (required when FILE_STORE=S3)
+
+    # Email — leave MAIL_SYSTEM empty to disable outbound email
+    # MAIL_SYSTEM: ""              # SES (AWS Simple Email Service) or empty
+    # EMAIL_ON_REGISTRATION: "false"
+    # SUPPORT_EMAIL: "support@yourchurch.com"
+
+    # URLs (needed when API is deployed behind an ingress)
+    # SERVER_PORT: "8084"
+    # SOCKET_URL: ""               # ws(s)://host — internal WebSocket URL used by messaging module
+    # SOCKET_PORT: "8087"
+    # B1ADMIN_ROOT: "https://admin.example.com"   # Used in email links back to admin
+
+    # AI provider — optional, powers Ask feature
+    # AI_PROVIDER: "openrouter"    # openrouter | openai
+
+    # Store / partner integrations — all optional
+    # STORE_API_URL: ""
   secrets:
+    # ── Required ─────────────────────────────────────────────────────────────
     # Connection strings and secrets are injected via Kubernetes Secrets.
     # In production, use the ExternalSecrets operator instead of hardcoding values here.
     ENCRYPTION_KEY: "CHANGE_ME"
     JWT_SECRET: "CHANGE_ME"
+
+    # Database — one connection string per module.
+    # When mysql.enabled=false, point these at your external DB (Cloud SQL, RDS, etc.)
     MEMBERSHIP_CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/membership"
     ATTENDANCE_CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/attendance"
     CONTENT_CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/content"
@@ -92,7 +127,60 @@ api:
     DOING_CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/doing"
     REPORTING_CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/reporting"
 
-# B1Admin (church staff dashboard)
+    # ── Optional secrets (uncomment and set as needed) ────────────────────────
+    # File storage (required when FILE_STORE=S3)
+    # AWS_S3_BUCKET: ""
+    # AWS_ACCESS_KEY_ID: ""
+    # AWS_SECRET_ACCESS_KEY: ""
+    # AWS_REGION: "us-east-1"
+
+    # AI integrations
+    # OPENROUTER_API_KEY: ""
+    # OPENAI_API_KEY: ""
+
+    # Media / content integrations
+    # YOUTUBE_API_KEY: ""
+    # PEXELS_KEY: ""
+    # VIMEO_TOKEN: ""
+    # API_BIBLE_KEY: ""
+    # YOUVERSION_API_KEY: ""
+    # PRAISECHARTS_CONSUMER_KEY: ""
+    # PRAISECHARTS_CONSUMER_SECRET: ""
+
+    # Donation / reCAPTCHA
+    # GOOGLE_RECAPTCHA_SECRET_KEY: ""
+
+    # CRM / marketing
+    # HUBSPOT_KEY: ""
+
+    # Cross-module database (Doing module reads Membership DB)
+    # DOING_MEMBERSHIP_CONNECTION_STRING: "mysql://..."
+  # Scheduling knobs — override in environment-specific values files to target node pools.
+  podAnnotations: {}
+  imagePullSecrets: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # HPA — requires metrics-server running in the cluster.
+  # Verify: kubectl get deployment -n kube-system metrics-server
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 80
+    # behavior: optional — tune scale-up/scale-down stabilization windows.
+    # Example for Sunday-morning traffic patterns (fast up, slow down):
+    # behavior:
+    #   scaleUp:
+    #     stabilizationWindowSeconds: 60
+    #   scaleDown:
+    #     stabilizationWindowSeconds: 600
+
+# B1Admin (church staff dashboard — React SPA served by nginx)
+# NOTE: REACT_APP_* env vars are baked into the JS bundle at build time by Vite.
+# The image already contains the API URLs for the environment it was built for.
+# Runtime env (this section) has no effect on those URLs.
 b1admin:
   enabled: true
   replicaCount: 1
@@ -105,6 +193,7 @@ b1admin:
     port: 80  # nginx in production image; dev image uses 3101
   ingress:
     enabled: false
+    className: ""
     hostname: admin.example.com
     tls: false
     annotations: {}
@@ -126,8 +215,19 @@ b1admin:
     # behavior: {}
   env:
     REACT_APP_STAGE: production
+  podAnnotations: {}
+  imagePullSecrets: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 80
 
-# B1App (public church website / member portal)
+# B1App (public church website / member portal — Next.js SSR)
 b1app:
   enabled: true
   replicaCount: 1
@@ -140,6 +240,7 @@ b1app:
     port: 3301
   ingress:
     enabled: false
+    className: ""
     hostname: example.com
     tls: false
     annotations: {}
@@ -160,8 +261,19 @@ b1app:
     # behavior: {}
   env:
     NEXT_STAGE: production
+  podAnnotations: {}
+  imagePullSecrets: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 80
 
-# LessonsApi (optional)
+# LessonsApi (optional — enable separately when needed)
 lessonsapi:
   enabled: false
   replicaCount: 1
@@ -174,6 +286,7 @@ lessonsapi:
     port: 8090
   ingress:
     enabled: false
+    className: ""
     hostname: lessons-api.example.com
     tls: false
     annotations: {}
@@ -195,8 +308,19 @@ lessonsapi:
     CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/lessons"
     ENCRYPTION_KEY: "CHANGE_ME"
     JWT_SECRET: "CHANGE_ME"
+  podAnnotations: {}
+  imagePullSecrets: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 80
 
-# AskApi (optional)
+# AskApi (optional — enable separately when needed)
 askapi:
   enabled: false
   replicaCount: 1
@@ -209,6 +333,7 @@ askapi:
     port: 8097
   ingress:
     enabled: false
+    className: ""
     hostname: ask-api.example.com
     tls: false
     annotations: {}
@@ -230,3 +355,14 @@ askapi:
     CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/askapi"
     ENCRYPTION_KEY: "CHANGE_ME"
     JWT_SECRET: "CHANGE_ME"
+  podAnnotations: {}
+  imagePullSecrets: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 80
