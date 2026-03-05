@@ -51,12 +51,29 @@ api:
     limits:
       cpu: 500m
       memory: 512Mi
+  # HPA — requires metrics-server running in the cluster.
+  # Verify: kubectl get deployment -n kube-system metrics-server
   autoscaling:
     enabled: false
     minReplicas: 2
     maxReplicas: 10
     targetCPUUtilizationPercentage: 60
     targetMemoryUtilizationPercentage: 80
+    # behavior: optional — tune scale-up/scale-down stabilization windows.
+    # Example for Sunday-morning traffic patterns (fast up, slow down):
+    # behavior:
+    #   scaleUp:
+    #     stabilizationWindowSeconds: 60
+    #     policies:
+    #       - type: Percent
+    #         value: 100
+    #         periodSeconds: 60
+    #   scaleDown:
+    #     stabilizationWindowSeconds: 600
+    #     policies:
+    #       - type: Pods
+    #         value: 1
+    #         periodSeconds: 120
   env:
     ENVIRONMENT: production
     CORS_ORIGIN: "*"
@@ -98,12 +115,15 @@ b1admin:
     limits:
       cpu: 200m
       memory: 256Mi
+  # HPA — requires metrics-server. nginx CPU/mem metrics are less meaningful
+  # than for dynamic services; consider connection-based metrics for production.
   autoscaling:
     enabled: false
     minReplicas: 2
     maxReplicas: 5
     targetCPUUtilizationPercentage: 60
     targetMemoryUtilizationPercentage: 80
+    # behavior: {}
   env:
     REACT_APP_STAGE: production
 
@@ -130,12 +150,14 @@ b1app:
     limits:
       cpu: 500m
       memory: 512Mi
+  # HPA — requires metrics-server.
   autoscaling:
     enabled: false
     minReplicas: 2
     maxReplicas: 10
     targetCPUUtilizationPercentage: 60
     targetMemoryUtilizationPercentage: 80
+    # behavior: {}
   env:
     NEXT_STAGE: production
 
@@ -162,6 +184,13 @@ lessonsapi:
     limits:
       cpu: 500m
       memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 80
+    # behavior: {}
   secrets:
     CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/lessons"
     ENCRYPTION_KEY: "CHANGE_ME"
@@ -190,6 +219,13 @@ askapi:
     limits:
       cpu: 500m
       memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 80
+    # behavior: {}
   secrets:
     CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/askapi"
     ENCRYPTION_KEY: "CHANGE_ME"

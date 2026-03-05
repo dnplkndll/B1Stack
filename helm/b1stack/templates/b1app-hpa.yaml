@@ -14,7 +14,7 @@ spec:
   minReplicas: {{ .Values.b1app.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.b1app.autoscaling.maxReplicas }}
   metrics:
-    {{- if .Values.b1app.autoscaling.targetCPUUtilizationPercentage }}
+    {{- if gt (int .Values.b1app.autoscaling.targetCPUUtilizationPercentage) 0 }}
     - type: Resource
       resource:
         name: cpu
@@ -22,7 +22,7 @@ spec:
           type: Utilization
           averageUtilization: {{ .Values.b1app.autoscaling.targetCPUUtilizationPercentage }}
     {{- end }}
-    {{- if .Values.b1app.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- if gt (int .Values.b1app.autoscaling.targetMemoryUtilizationPercentage) 0 }}
     - type: Resource
       resource:
         name: memory
@@ -30,4 +30,8 @@ spec:
           type: Utilization
           averageUtilization: {{ .Values.b1app.autoscaling.targetMemoryUtilizationPercentage }}
     {{- end }}
+  {{- if .Values.b1app.autoscaling.behavior }}
+  behavior:
+    {{- toYaml .Values.b1app.autoscaling.behavior | nindent 4 }}
+  {{- end }}
 {{- end }}

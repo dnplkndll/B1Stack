@@ -7,7 +7,9 @@ metadata:
   labels:
     app: {{ .Release.Name }}-lessonsapi
 spec:
+  {{- if not .Values.lessonsapi.autoscaling.enabled }}
   replicas: {{ .Values.lessonsapi.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       app: {{ .Release.Name }}-lessonsapi
