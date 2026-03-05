@@ -7,7 +7,9 @@ metadata:
   labels:
     app: {{ .Release.Name }}-b1app
 spec:
+  {{- if not .Values.b1app.autoscaling.enabled }}
   replicas: {{ .Values.b1app.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       app: {{ .Release.Name }}-b1app
