@@ -1,10 +1,14 @@
 # B1Stack Helm umbrella chart values
 
-# Bitnami MySQL sub-chart (bundled database)
+# Bundled MySQL (official mysql:8.0 image — no Bitnami dependency).
 # Set mysql.enabled: false to use an external MySQL / managed DB (Cloud SQL, RDS, etc.)
 # and supply connection strings via api.secrets.*_CONNECTION_STRING at deploy time.
 mysql:
   enabled: true
+  image:
+    repository: mysql
+    tag: "8.0"
+    pullPolicy: IfNotPresent
   auth:
     rootPassword: "b1stack-root-dev"
     database: "membership"
@@ -23,6 +27,16 @@ mysql:
       CREATE DATABASE IF NOT EXISTS askapi     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
       GRANT ALL PRIVILEGES ON *.* TO 'b1stack'@'%';
       FLUSH PRIVILEGES;
+  persistence:
+    size: 10Gi
+    storageClass: ""  # "" uses the cluster default storage class
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
 
 global:
   # Set baseDomain to auto-derive all service hostnames and enable ingress.
@@ -44,9 +58,6 @@ global:
     # Setting this also enables TLS automatically.
     clusterIssuer: ""
 
-  # imageRegistry: Override to pull all images from a custom registry / pull-through cache.
-  #   Leave empty to use Docker Hub (default for Bitnami charts).
-  imageRegistry: ""
   imagePullSecrets: []
   # storageClass: "" uses the cluster default (gp2 on EKS, standard on GKE, hcloud-volumes on Hetzner).
   storageClass: ""

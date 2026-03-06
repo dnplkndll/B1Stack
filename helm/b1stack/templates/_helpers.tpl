@@ -139,7 +139,7 @@ Usage: include "b1stack.connStr" (list "membership" . .Values.api.secrets.MEMBER
     {{- end -}}
   {{- end -}}
   {{- if not $pw -}}
-    {{- fail "mysql.auth.password is empty and the mysql secret was not found. Set mysql.auth.password or ensure the mysql sub-chart has been installed." -}}
+    {{- fail "mysql.auth.password is empty and the mysql secret was not found. Set mysql.auth.password." -}}
   {{- end -}}
   {{- printf "mysql://%s:%s@%s-mysql:3306/%s"
         $ctx.Values.mysql.auth.username

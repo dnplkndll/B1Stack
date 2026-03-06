@@ -14,20 +14,11 @@ global:
   baseDomain: b1-test.hz.ledoweb.com
   ingress:
     clusterIssuer: letsencrypt-staging
-  # Bitnami chart security check blocks non-standard registries.
-  # Top-level global propagates to all sub-charts automatically.
-  security:
-    allowInsecureImages: true
 
 mysql:
-  # Bitnami removed all tags from Docker Hub; use AWS ECR Public as a free mirror.
-  image:
-    registry: public.ecr.aws
-    repository: bitnami/mysql
-  primary:
-    persistence:
-      storageClass: hcloud-volumes
-      size: 10Gi
+  persistence:
+    storageClass: hcloud-volumes
+    size: 10Gi
 
 api:
   ingress:
