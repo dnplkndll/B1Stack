@@ -119,15 +119,18 @@ api:
     ENCRYPTION_KEY: "CHANGE_ME"
     JWT_SECRET: "CHANGE_ME"
 
-    # Database — one connection string per module.
-    # When mysql.enabled=false, point these at your external DB (Cloud SQL, RDS, etc.)
-    MEMBERSHIP_CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/membership"
-    ATTENDANCE_CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/attendance"
-    CONTENT_CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/content"
-    GIVING_CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/giving"
-    MESSAGING_CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/messaging"
-    DOING_CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/doing"
-    REPORTING_CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/reporting"
+    # Database — connection strings per module.
+    # When mysql.enabled=true (default), these are AUTO-DERIVED from mysql.auth
+    # credentials — you do NOT need to set them here.
+    # When mysql.enabled=false, set each to point at your external DB:
+    #   mysql://user:pass@host:3306/dbname
+    MEMBERSHIP_CONNECTION_STRING: ""
+    ATTENDANCE_CONNECTION_STRING: ""
+    CONTENT_CONNECTION_STRING: ""
+    GIVING_CONNECTION_STRING: ""
+    MESSAGING_CONNECTION_STRING: ""
+    DOING_CONNECTION_STRING: ""
+    REPORTING_CONNECTION_STRING: ""
 
     # ── Optional secrets (uncomment and set as needed) ────────────────────────
     # File storage (required when FILE_STORE=S3)
@@ -322,6 +325,20 @@ lessonsapi:
     targetCPUUtilizationPercentage: 60
     targetMemoryUtilizationPercentage: 80
 
+# Database initialisation Job (Helm post-install / post-upgrade hook).
+# Runs tools/dbScripts/*.sql against the bundled MySQL to create tables on first
+# install and apply any new schema on upgrades. Safe to re-run (idempotent SQL).
+# Only active when mysql.enabled=true (bundled MySQL).
+initdb:
+  enabled: true
+  # hook-succeeded: delete Job pod after success (keeps cluster clean).
+  # hook-failed: keep Job pod after failure for log inspection.
+  # before-hook-creation: delete old hook Job before creating a new one.
+  hookDeletePolicy: "before-hook-creation,hook-succeeded"
+  # Retry up to 3 times before marking the Job as failed.
+  backoffLimit: 3
+  # Kill the Job after 10 minutes to avoid hanging installs.
+  activeDeadlineSeconds: 600
 # AskApi (optional — enable separately when needed)
 askapi:
   enabled: false

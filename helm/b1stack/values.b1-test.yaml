@@ -1,23 +1,27 @@
 # B1-Test environment overrides for hz.ledoweb.com
 #
-# Deploy:
+# Deploy (connection strings auto-derived from mysql.auth.password when mysql.enabled=true):
 #   helm upgrade --install b1stack helm/b1stack \
 #     --kube-context hetzner-ledo --namespace b1-test --create-namespace \
 #     -f helm/b1stack/values.yaml -f helm/b1stack/values.b1-test.yaml \
+#     --set mysql.image.registry=public.ecr.aws \
+#     --set mysql.image.repository=bitnami/mysql \
+#     --set global.security.allowInsecureImages=true \
 #     --set mysql.auth.rootPassword=<ROOT_PW> \
 #     --set mysql.auth.password=<APP_PW> \
 #     --set api.secrets.ENCRYPTION_KEY=<24_CHAR_KEY> \
 #     --set api.secrets.JWT_SECRET=<SECRET> \
-#     --set "api.secrets.MEMBERSHIP_CONNECTION_STRING=mysql://b1stack:<APP_PW>@b1stack-mysql:3306/membership" \
-#     --set "api.secrets.ATTENDANCE_CONNECTION_STRING=mysql://b1stack:<APP_PW>@b1stack-mysql:3306/attendance" \
-#     --set "api.secrets.CONTENT_CONNECTION_STRING=mysql://b1stack:<APP_PW>@b1stack-mysql:3306/content" \
-#     --set "api.secrets.GIVING_CONNECTION_STRING=mysql://b1stack:<APP_PW>@b1stack-mysql:3306/giving" \
-#     --set "api.secrets.MESSAGING_CONNECTION_STRING=mysql://b1stack:<APP_PW>@b1stack-mysql:3306/messaging" \
-#     --set "api.secrets.DOING_CONNECTION_STRING=mysql://b1stack:<APP_PW>@b1stack-mysql:3306/doing" \
-#     --set "api.secrets.REPORTING_CONNECTION_STRING=mysql://b1stack:<APP_PW>@b1stack-mysql:3306/reporting" \
 #     --wait --timeout 10m
 
 mysql:
+  # Bitnami removed all tags from Docker Hub; use AWS ECR Public as a free mirror.
+  # See: https://github.com/bitnami/charts/issues/29947
+  image:
+    registry: public.ecr.aws
+    repository: bitnami/mysql
+  global:
+    security:
+      allowInsecureImages: true
   primary:
     persistence:
       storageClass: hcloud-volumes
