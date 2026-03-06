@@ -24,7 +24,10 @@ jobs:
         run: pip install git-aggregator
 
       - name: Aggregate service repos
-        run: gitaggregate -c repos.yaml -j 5
+        run: |
+          git config --global user.email "ci@b1stack.dev"
+          git config --global user.name "B1Stack CI"
+          gitaggregate -c repos.yaml -j 5
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

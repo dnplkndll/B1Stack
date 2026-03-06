@@ -5,8 +5,7 @@ on:
     branches:
       - main
   schedule:
-    # Weekly build every Monday 06:00 UTC — rebuilds images pinned to current submodule SHAs in main.
-    # To pull in new upstream commits, merge the PR from update-submodules.yml first.
+    # Weekly build every Monday 06:00 UTC — rebuilds images from repos.yaml upstream refs.
     - cron: '0 6 * * 1'
   workflow_dispatch:
 
@@ -29,8 +28,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          submodules: recursive
+          python-version: '3.12'
+
+      - name: Aggregate service repos
+        run: |
+          pip install git-aggregator
+          git config --global user.email "ci@b1stack.dev"
+          git config --global user.name "B1Stack CI"
+          gitaggregate -c repos.yaml -d ./services/Api
 
       - name: Compute tags
         id: meta
@@ -73,8 +82,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          submodules: recursive
+          python-version: '3.12'
+
+      - name: Aggregate service repos
+        run: |
+          pip install git-aggregator
+          git config --global user.email "ci@b1stack.dev"
+          git config --global user.name "B1Stack CI"
+          gitaggregate -c repos.yaml -d ./services/B1Admin
 
       - name: Compute tags
         id: meta
@@ -133,8 +152,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          submodules: recursive
+          python-version: '3.12'
+
+      - name: Aggregate service repos
+        run: |
+          pip install git-aggregator
+          git config --global user.email "ci@b1stack.dev"
+          git config --global user.name "B1Stack CI"
+          gitaggregate -c repos.yaml -d ./services/B1App
 
       - name: Compute tags
         id: meta
@@ -178,8 +207,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          submodules: recursive
+          python-version: '3.12'
+
+      - name: Aggregate service repos
+        run: |
+          pip install git-aggregator
+          git config --global user.email "ci@b1stack.dev"
+          git config --global user.name "B1Stack CI"
+          gitaggregate -c repos.yaml -j 5
 
       - name: Compute release tag
         id: tag
@@ -189,7 +228,7 @@ jobs:
           echo "date_tag=${DATE}" >> $GITHUB_OUTPUT
           echo "sha_tag=${SHA}" >> $GITHUB_OUTPUT
 
-          # Collect submodule SHAs for release notes
+          # Collect service SHAs for release notes
           API_SHA=$(git -C services/Api rev-parse --short HEAD 2>/dev/null || echo "n/a")
           B1ADMIN_SHA=$(git -C services/B1Admin rev-parse --short HEAD 2>/dev/null || echo "n/a")
           B1APP_SHA=$(git -C services/B1App rev-parse --short HEAD 2>/dev/null || echo "n/a")
@@ -217,7 +256,7 @@ jobs:
             > **Note:** B1Admin images have b1-test API URLs baked in at build time.
             > To deploy to a different environment, rebuild with the appropriate `REACT_APP_*` build-args.
 
-            ## Upstream submodule commits
+            ## Service commits
 
             | Service | Commit |
             |---------|--------|
