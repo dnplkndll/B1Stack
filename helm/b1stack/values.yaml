@@ -1,0 +1,307 @@
+# B1Stack Helm umbrella chart values
+
+# Bitnami MySQL sub-chart (bundled database)
+# Set mysql.enabled: false to use an external MySQL / managed DB (Cloud SQL, RDS, etc.)
+# and supply connection strings via api.secrets.*_CONNECTION_STRING at deploy time.
+mysql:
+  enabled: true
+  auth:
+    rootPassword: "b1stack-root-dev"
+    database: "membership"
+    username: "b1stack"
+    password: "b1stack-dev"
+  initdbScripts:
+    01-init-databases.sql: |
+      CREATE DATABASE IF NOT EXISTS membership CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE DATABASE IF NOT EXISTS attendance CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE DATABASE IF NOT EXISTS content    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE DATABASE IF NOT EXISTS giving     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE DATABASE IF NOT EXISTS messaging  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE DATABASE IF NOT EXISTS doing      CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE DATABASE IF NOT EXISTS reporting  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE DATABASE IF NOT EXISTS lessons    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE DATABASE IF NOT EXISTS askapi     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      GRANT ALL PRIVILEGES ON *.* TO 'b1stack'@'%';
+      FLUSH PRIVILEGES;
+
+global:
+  # Set baseDomain to auto-derive all service hostnames and enable ingress.
+  # Hostnames use dash separators for wildcard cert compatibility:
+  #   api-{baseDomain}, admin-{baseDomain}, {baseDomain},
+  #   lessons-api-{baseDomain}, ask-api-{baseDomain}
+  # A single *.parent.domain cert covers all services.
+  # When empty: no ingress created (port-forward only).
+  baseDomain: ""
+
+  ingress:
+    # className: ingress controller class — "nginx" (default), "gce" (GKE), "alb" (EKS + AWS ALB Controller)
+    className: "nginx"
+    # tls: false by default so --set baseDomain alone gives working HTTP ingress.
+    # Enable via --set global.ingress.tls=true (or set clusterIssuer, which implies TLS).
+    tls: false
+    annotations: {}
+    # cert-manager ClusterIssuer — auto-added to ingress annotations when set.
+    # Setting this also enables TLS automatically.
+    clusterIssuer: ""
+
+  # imageRegistry: Override to pull all images from a custom registry / pull-through cache.
+  #   Leave empty to use Docker Hub (default for Bitnami charts).
+  imageRegistry: ""
+  imagePullSecrets: []
+  # storageClass: "" uses the cluster default (gp2 on EKS, standard on GKE, hcloud-volumes on Hetzner).
+  storageClass: ""
+
+# ChurchApps API
+api:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/dnplkndll/b1stack/api
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8084
+    socketPort: 8087
+  ingress:
+    enabled: false
+    className: ""
+    hostname: ""
+    tls: false
+    annotations: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 80
+  env:
+    ENVIRONMENT: production        # dev | staging | production — selects config/<env>.json defaults
+    CORS_ORIGIN: "*"               # Restrict to your domains in production
+    FILE_STORE: disk               # disk (ephemeral pod storage) | S3 (AWS S3 / GCS via S3-compat API)
+    DELIVERY_PROVIDER: local       # local | aws
+    # CONTENT_ROOT: ""             # Public base URL for uploaded files (required when FILE_STORE=S3)
+    # MAIL_SYSTEM: ""              # SES (AWS Simple Email Service) or empty to disable
+    # AI_PROVIDER: "openrouter"    # openrouter | openai
+  secrets:
+    # Auto-generated when empty — stable across upgrades via K8s secret lookup.
+    # Set explicitly for deterministic values or production use.
+    ENCRYPTION_KEY: ""
+    JWT_SECRET: ""
+
+    # Database — auto-derived from mysql.auth when mysql.enabled=true.
+    # Set explicitly for external DB (mysql://user:pass@host:3306/dbname).
+    MEMBERSHIP_CONNECTION_STRING: ""
+    ATTENDANCE_CONNECTION_STRING: ""
+    CONTENT_CONNECTION_STRING: ""
+    GIVING_CONNECTION_STRING: ""
+    MESSAGING_CONNECTION_STRING: ""
+    DOING_CONNECTION_STRING: ""
+    REPORTING_CONNECTION_STRING: ""
+
+    # ── Optional secrets (uncomment and set as needed) ────────────────────────
+    # File storage (required when FILE_STORE=S3)
+    # AWS_S3_BUCKET: ""
+    # AWS_ACCESS_KEY_ID: ""
+    # AWS_SECRET_ACCESS_KEY: ""
+    # AWS_REGION: "us-east-1"
+
+    # AI integrations
+    # OPENROUTER_API_KEY: ""
+    # OPENAI_API_KEY: ""
+
+    # Media / content integrations
+    # YOUTUBE_API_KEY: ""
+    # PEXELS_KEY: ""
+    # VIMEO_TOKEN: ""
+    # API_BIBLE_KEY: ""
+    # YOUVERSION_API_KEY: ""
+    # PRAISECHARTS_CONSUMER_KEY: ""
+    # PRAISECHARTS_CONSUMER_SECRET: ""
+
+    # Donation / reCAPTCHA
+    # GOOGLE_RECAPTCHA_SECRET_KEY: ""
+
+    # CRM / marketing
+    # HUBSPOT_KEY: ""
+
+    # Cross-module database (Doing module reads Membership DB)
+    # DOING_MEMBERSHIP_CONNECTION_STRING: "mysql://..."
+  podAnnotations: {}
+  imagePullSecrets: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# B1Admin (church staff dashboard — React SPA served by nginx)
+# NOTE: REACT_APP_* env vars are baked into the JS bundle at build time by Vite.
+# The image already contains the API URLs for the environment it was built for.
+# Runtime env (this section) has no effect on those URLs.
+b1admin:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/dnplkndll/b1stack/b1admin
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  ingress:
+    enabled: false
+    className: ""
+    hostname: ""
+    tls: false
+    annotations: {}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 80
+  env:
+    REACT_APP_STAGE: production
+  podAnnotations: {}
+  imagePullSecrets: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# B1App (public church website / member portal — Next.js SSR)
+b1app:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/dnplkndll/b1stack/b1app
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3301
+  ingress:
+    enabled: false
+    className: ""
+    hostname: ""
+    tls: false
+    annotations: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 80
+  env:
+    NEXT_STAGE: production
+  podAnnotations: {}
+  imagePullSecrets: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# LessonsApi (optional — enable separately when needed)
+lessonsapi:
+  enabled: false
+  replicaCount: 1
+  image:
+    repository: ghcr.io/dnplkndll/b1stack/lessonsapi
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8090
+  ingress:
+    enabled: false
+    className: ""
+    hostname: ""
+    tls: false
+    annotations: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 80
+  secrets:
+    CONNECTION_STRING: ""
+    ENCRYPTION_KEY: ""
+    JWT_SECRET: ""
+  podAnnotations: {}
+  imagePullSecrets: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Database initialisation Job (Helm post-install / post-upgrade hook).
+initdb:
+  enabled: true
+  hookDeletePolicy: "before-hook-creation,hook-succeeded"
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+
+# AskApi (optional — enable separately when needed)
+askapi:
+  enabled: false
+  replicaCount: 1
+  image:
+    repository: ghcr.io/dnplkndll/b1stack/askapi
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8097
+  ingress:
+    enabled: false
+    className: ""
+    hostname: ""
+    tls: false
+    annotations: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 80
+  secrets:
+    CONNECTION_STRING: ""
+    ENCRYPTION_KEY: ""
+    JWT_SECRET: ""
+  podAnnotations: {}
+  imagePullSecrets: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}

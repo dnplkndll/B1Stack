@@ -1,0 +1,73 @@
+{{- if .Values.lessonsapi.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-lessonsapi
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-lessonsapi
+spec:
+  {{- if not .Values.lessonsapi.autoscaling.enabled }}
+  replicas: {{ .Values.lessonsapi.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-lessonsapi
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-lessonsapi
+      {{- with .Values.lessonsapi.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if or .Values.lessonsapi.imagePullSecrets .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+        {{- end }}
+        {{- range .Values.lessonsapi.imagePullSecrets }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.lessonsapi.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.lessonsapi.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.lessonsapi.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: lessonsapi
+          image: "{{ .Values.lessonsapi.image.repository }}:{{ .Values.lessonsapi.image.tag }}"
+          imagePullPolicy: {{ .Values.lessonsapi.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.lessonsapi.service.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-lessonsapi-config
+            {{- if .Values.lessonsapi.secrets }}
+            - secretRef:
+                name: {{ .Release.Name }}-lessonsapi-secrets
+            {{- end }}
+          resources:
+            {{- toYaml .Values.lessonsapi.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.lessonsapi.service.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.lessonsapi.service.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+{{- end }}

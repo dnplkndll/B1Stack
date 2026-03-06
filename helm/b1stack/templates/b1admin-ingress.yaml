@@ -1,0 +1,31 @@
+{{- if (include "b1stack.ingressEnabled" (list . "b1admin")) }}
+{{- $hostname := include "b1stack.hostname" (list . "b1admin" "admin") }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-b1admin
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-b1admin
+  annotations:
+    {{- include "b1stack.ingressAnnotations" (list . "b1admin") | nindent 4 }}
+spec:
+  ingressClassName: {{ include "b1stack.ingressClassName" (list . "b1admin") }}
+  {{- if (include "b1stack.ingressTls" (list . "b1admin")) }}
+  tls:
+    - hosts:
+        - {{ $hostname }}
+      secretName: {{ .Release.Name }}-b1admin-tls
+  {{- end }}
+  rules:
+    - host: {{ $hostname }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-b1admin
+                port:
+                  number: {{ .Values.b1admin.service.port }}
+{{- end }}
