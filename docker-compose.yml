@@ -18,11 +18,25 @@ services:
       retries: 10
       start_period: 30s
 
+  # ─── Mailpit (local email catcher) ──────────────────────────────────────────
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "${MAILPIT_UI_PORT:-8025}:8025"   # Web UI
+      - "${MAILPIT_SMTP_PORT:-1025}:25"  # SMTP (host → container 25)
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+      # Bind SMTP to port 25 inside the container so nodemailer's default port works.
+      # Mapped to host port 1025 to avoid needing root on the host.
+      MP_SMTP_BIND_ADDR: "0.0.0.0:25"
+
   # ─── ChurchApps API ────────────────────────────────────────────────────────
   api:
     build:
       context: .
       dockerfile: docker/api/Dockerfile
+    restart: unless-stopped
     depends_on:
       mysql:
         condition: service_healthy
@@ -32,6 +46,12 @@ services:
     volumes:
       - ./services/Api/src:/app/src:cached
       - api_node_modules:/app/node_modules
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8084/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     environment:
       ENVIRONMENT: dev
       SERVER_PORT: 8084
@@ -60,21 +80,35 @@ services:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GOOGLE_RECAPTCHA_SECRET_KEY: ${GOOGLE_RECAPTCHA_SECRET_KEY:-}
+      # Email — routed to mailpit for local email catching
+      # MAIL_SYSTEM=SMTP activates nodemailer SMTP transport in @churchapps/apihelper
+      MAIL_SYSTEM: SMTP
+      SMTP_HOST: mailpit
+      SMTP_SECURE: "false"
 
   # ─── B1Admin (church staff dashboard) ─────────────────────────────────────
   b1admin:
     build:
       context: .
       dockerfile: docker/b1admin/Dockerfile.dev
+    restart: unless-stopped
     depends_on:
       - api
     ports:
       - "3101:3101"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3101/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     volumes:
       - ./services/B1Admin/src:/app/src:cached
       - ./services/B1Admin/public:/app/public:cached
       - b1admin_node_modules:/app/node_modules
     environment:
+      # PORT tells Vite dev server to bind to 3101 (not default 5173)
+      PORT: 3101
       # REACT_APP_* vars are read at Vite dev-server start.
       # Restart the container (not just the page) to pick up env changes.
       REACT_APP_STAGE: dev
@@ -99,10 +133,17 @@ services:
     build:
       context: .
       dockerfile: docker/b1app/Dockerfile
+    restart: unless-stopped
     depends_on:
       - api
     ports:
       - "3301:3301"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3301/"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     volumes:
       - ./services/B1App/src:/app/src:cached
       - ./services/B1App/public:/app/public:cached

@@ -3,7 +3,8 @@ WORKDIR /app
 
 # Install dependencies first for layer caching
 COPY services/B1App/package.json services/B1App/package-lock.json ./
-RUN npm ci && npm run postinstall
+# npm install (not ci) — upstream lock file drifts frequently
+RUN npm install && npm run postinstall
 
 # Copy build config (not hot-reloaded)
 COPY services/B1App/next.config.mjs services/B1App/tsconfig.json ./

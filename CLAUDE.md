@@ -4,17 +4,19 @@ This repo orchestrates the ChurchApps B1 product suite for local development and
 
 ## Repo Structure
 
-- `services/` — git submodules pointing to ChurchApps upstream repos (read-only here; make upstream PRs)
+- `repos.yaml` — git-aggregator config declaring all service repos, remotes, and merge strategy
+- `services/` — cloned service repos (gitignored, managed by `gitaggregate`)
 - `docker/` — Dockerfiles for each service (volume-mount pattern for hot-reload)
 - `mysql/init/` — SQL run by MySQL on first container start (creates databases, not tables)
-- `scripts/` — setup, init-db, health-check, reset-db helpers
-- `helm/b1stack/` — Helm umbrella chart skeleton (stub, not production-ready)
+- `scripts/` — setup, init-db, health-check, reset-db, wait-ready helpers
+- `helm/b1stack/` — Helm umbrella chart (flat, no sub-charts; deployed on Hetzner b1-test)
 
 ## Services and Ports
 
 | Service    | Port(s)   | Dev command          |
 |-----------|-----------|----------------------|
 | mysql     | 3306      | MySQL 8.0 image      |
+| mailpit   | 8025/1025 | Local SMTP catcher (web UI: 8025, SMTP: 1025) |
 | api       | 8084/8087 | `tsx watch src/index.ts` |
 | b1admin   | 3101      | `npm start` (Vite)   |
 | b1app     | 3301      | `npm run dev` (Next.js) |
@@ -37,16 +39,67 @@ This repo orchestrates the ChurchApps B1 product suite for local development and
 ## Common Commands
 
 ```bash
-docker compose up -d                          # start core services
-docker compose --profile full up -d           # + lessonsapi + askapi
-docker compose exec api npm run initdb        # create DB tables (first run)
-docker compose logs -f api                    # tail api logs
-docker compose restart b1admin               # pick up env var changes
-./scripts/reset-db.sh                         # drop + recreate tables
+make setup                                    # first-time: aggregate repos, create .env
+make aggregate                                # pull/merge repos from upstream + fork branches
+make up                                       # start core services + wait for ready
+make down                                     # stop all services
+make up-full                                  # + lessonsapi + askapi
+make init                                     # create DB tables (first run)
+make logs                                     # tail all service logs
+make health                                   # health check all services
+make test                                     # run Playwright E2E against localhost
+make mail                                     # open Mailpit web UI
+make reset                                    # drop + recreate tables
+make demo-data                                # load demo/seed data
+make shell-api                                # sh into API container
+make shell-db                                 # MySQL shell
 ```
 
-## Submodule Workflow
+## Service Repos (git-aggregator)
 
-- Do NOT commit changes to files inside `services/` — make PRs to ChurchApps upstream.
-- To update a submodule to latest: `git submodule update --remote services/<Name>`
-- Helm charts in `helm/b1stack/` are stubs — build out templates before using in production.
+Service repos are managed by [git-aggregator](https://github.com/acsone/git-aggregator) via `repos.yaml`.
+The `services/` directory is gitignored — repos are cloned locally by `make setup` or `make aggregate`.
+
+| Service | Fork (origin) | Upstream |
+|---------|---------------|----------|
+| Api | `dnplkndll/Api` | `ChurchApps/Api` |
+| B1Admin | `dnplkndll/B1Admin` | `ChurchApps/B1Admin` |
+| B1App | `dnplkndll/B1App` | `ChurchApps/B1App` |
+| LessonsApi | — | `ChurchApps/LessonsApi` |
+| AskApi | — | `ChurchApps/AskApi` |
+
+### How repos.yaml works
+
+Each entry in `repos.yaml` declares remotes and an ordered list of merges:
+
+```yaml
+./services/B1Admin:
+  remotes:
+    upstream: https://github.com/ChurchApps/B1Admin.git
+    origin: https://github.com/dnplkndll/B1Admin.git
+  target: origin main
+  merges:
+    - upstream main           # start from upstream
+    - origin feat/my-feature  # merge our branch on top
+```
+
+Running `make aggregate` (or `gitaggregate -c repos.yaml`) clones each repo, sets up remotes, and builds a consolidated branch by merging each ref in order.
+
+### Making changes in a service
+
+1. `cd services/<Name>` and create a feature branch
+2. Commit and push to fork: `git push origin feat/my-change`
+3. Add the branch to `repos.yaml` merges list
+4. Run `make aggregate` to verify the merge applies cleanly
+5. When ready for upstream, PR from `dnplkndll/<Name>` → `ChurchApps/<Name>`
+6. After upstream merges, remove the branch from `repos.yaml`
+
+### Remotes inside service repos
+
+- `origin` — our fork (`dnplkndll/*`), for day-to-day work
+- `upstream` — ChurchApps original, pulled automatically by git-aggregator
+
+### Other notes
+
+- Helm chart uses `public.ecr.aws/bitnami/mysql` (Bitnami removed Docker Hub tags).
+- See [CONTRIBUTING.md](CONTRIBUTING.md) for contributor workflow, [ROADMAP.md](ROADMAP.md) for feature priorities.

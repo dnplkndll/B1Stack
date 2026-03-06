@@ -9,6 +9,8 @@ RUN npm ci
 COPY services/Api/config/ ./config/
 COPY services/Api/tsconfig.json services/Api/tsconfig.prod.json ./
 COPY services/Api/eslint.config.js ./
+# Copy jest config as .cjs (upstream uses module.exports but package.json has "type": "module")
+COPY services/Api/jest.config.js ./jest.config.cjs
 COPY services/Api/tools/ ./tools/
 
 # src/ is volume-mounted at runtime for hot-reload

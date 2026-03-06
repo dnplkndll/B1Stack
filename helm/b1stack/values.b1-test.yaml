@@ -1,27 +1,29 @@
 # B1-Test environment overrides for hz.ledoweb.com
 #
-# Deploy (connection strings auto-derived from mysql.auth.password when mysql.enabled=true):
+# Deploy:
+#   helm dep update helm/b1stack
 #   helm upgrade --install b1stack helm/b1stack \
 #     --kube-context hetzner-ledo --namespace b1-test --create-namespace \
 #     -f helm/b1stack/values.yaml -f helm/b1stack/values.b1-test.yaml \
-#     --set mysql.image.registry=public.ecr.aws \
-#     --set mysql.image.repository=bitnami/mysql \
-#     --set global.security.allowInsecureImages=true \
-#     --set mysql.auth.rootPassword=<ROOT_PW> \
-#     --set mysql.auth.password=<APP_PW> \
-#     --set api.secrets.ENCRYPTION_KEY=<24_CHAR_KEY> \
-#     --set api.secrets.JWT_SECRET=<SECRET> \
 #     --wait --timeout 10m
+#
+# All hostnames, TLS, and cert-manager annotations are derived from global.baseDomain.
+# Secrets are auto-generated on first install and stable across upgrades.
+
+global:
+  baseDomain: b1-test.hz.ledoweb.com
+  ingress:
+    clusterIssuer: letsencrypt-staging
+  # Bitnami chart security check blocks non-standard registries.
+  # Top-level global propagates to all sub-charts automatically.
+  security:
+    allowInsecureImages: true
 
 mysql:
   # Bitnami removed all tags from Docker Hub; use AWS ECR Public as a free mirror.
-  # See: https://github.com/bitnami/charts/issues/29947
   image:
     registry: public.ecr.aws
     repository: bitnami/mysql
-  global:
-    security:
-      allowInsecureImages: true
   primary:
     persistence:
       storageClass: hcloud-volumes
@@ -29,11 +31,7 @@ mysql:
 
 api:
   ingress:
-    enabled: true
-    hostname: api.b1-test.hz.ledoweb.com
-    tls: true
     annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-staging
       nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
       nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
   env:
@@ -45,23 +43,7 @@ api:
     FILE_STORE: disk
     DELIVERY_PROVIDER: local
 
-b1admin:
-  service:
-    port: 80  # nginx in prod image
-  ingress:
-    enabled: true
-    hostname: admin.b1-test.hz.ledoweb.com
-    tls: true
-    annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-staging
-
 b1app:
-  ingress:
-    enabled: true
-    hostname: b1-test.hz.ledoweb.com
-    tls: true
-    annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-staging
   env:
     NEXT_STAGE: staging  # uses external *.staging.churchapps.org APIs
 

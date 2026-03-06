@@ -1,48 +1,84 @@
 B1Stack deployed successfully!
 
-== Access URLs ==
-{{- if .Values.api.ingress.enabled }}
-  API:     {{ if .Values.api.ingress.tls }}https{{ else }}http{{ end }}://{{ .Values.api.ingress.hostname }}
+== Access ==
+{{- if or .Values.global.baseDomain .Values.api.ingress.enabled }}
+{{- if .Values.api.enabled }}
+{{- $host := include "b1stack.hostname" (list . "api" "api") }}
+{{- $tls := include "b1stack.ingressTls" (list . "api") }}
+  API:     {{ if $tls }}https{{ else }}http{{ end }}://{{ $host }}
 {{- end }}
-{{- if .Values.b1admin.ingress.enabled }}
-  B1Admin: {{ if .Values.b1admin.ingress.tls }}https{{ else }}http{{ end }}://{{ .Values.b1admin.ingress.hostname }}
+{{- if .Values.b1admin.enabled }}
+{{- $host := include "b1stack.hostname" (list . "b1admin" "admin") }}
+{{- $tls := include "b1stack.ingressTls" (list . "b1admin") }}
+  B1Admin: {{ if $tls }}https{{ else }}http{{ end }}://{{ $host }}
 {{- end }}
-{{- if .Values.b1app.ingress.enabled }}
-  B1App:   {{ if .Values.b1app.ingress.tls }}https{{ else }}http{{ end }}://{{ .Values.b1app.ingress.hostname }}
+{{- if .Values.b1app.enabled }}
+{{- $host := include "b1stack.hostname" (list . "b1app" "") }}
+{{- $tls := include "b1stack.ingressTls" (list . "b1app") }}
+  B1App:   {{ if $tls }}https{{ else }}http{{ end }}://{{ $host }}
+{{- end }}
+{{- if .Values.lessonsapi.enabled }}
+{{- $host := include "b1stack.hostname" (list . "lessonsapi" "lessons-api") }}
+{{- $tls := include "b1stack.ingressTls" (list . "lessonsapi") }}
+  Lessons: {{ if $tls }}https{{ else }}http{{ end }}://{{ $host }}
+{{- end }}
+{{- if .Values.askapi.enabled }}
+{{- $host := include "b1stack.hostname" (list . "askapi" "ask-api") }}
+{{- $tls := include "b1stack.ingressTls" (list . "askapi") }}
+  AskApi:  {{ if $tls }}https{{ else }}http{{ end }}://{{ $host }}
+{{- end }}
+{{- else }}
+  No baseDomain set — use port-forward to access services:
+
+{{- if .Values.b1admin.enabled }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Release.Name }}-b1admin 3101:{{ .Values.b1admin.service.port }}
+  # B1Admin → http://localhost:3101
+{{- end }}
+{{- if .Values.b1app.enabled }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Release.Name }}-b1app 3301:{{ .Values.b1app.service.port }}
+  # B1App   → http://localhost:3301
+{{- end }}
+{{- if .Values.api.enabled }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Release.Name }}-api 8084:{{ .Values.api.service.port }}
+  # API     → http://localhost:8084
+{{- end }}
 {{- end }}
 
-== Database migrations ==
+== Demo Login ==
+  Email:    demo@b1.church
+  Password: password
+  Church:   Grace Community Church
+
+== Database ==
 {{- if and .Values.mysql.enabled .Values.initdb.enabled }}
-✓ Automatic: the initdb Job runs on every install/upgrade (Helm post hook).
+  Bundled MySQL with auto-migration (initdb Job runs on install/upgrade).
   Check status:
     kubectl -n {{ .Release.Namespace }} get jobs -l app={{ .Release.Name }}-initdb
     kubectl -n {{ .Release.Namespace }} logs job/{{ .Release.Name }}-initdb-{{ .Release.Revision }}
+{{- else if .Values.mysql.enabled }}
+  Bundled MySQL — initdb Job is disabled. Run migrations manually:
+    kubectl -n {{ .Release.Namespace }} exec -it deploy/{{ .Release.Name }}-api -- sh /app/initdb.sh
 {{- else }}
-  initdb Job is disabled (initdb.enabled=false or mysql.enabled=false).
-  Run manually:
-    kubectl -n {{ .Release.Namespace }} exec -it \
-      $(kubectl -n {{ .Release.Namespace }} get pod -l app={{ .Release.Name }}-api \
-        -o jsonpath='{.items[0].metadata.name}') \
-      -- sh /app/initdb.sh
+  External database (mysql.enabled=false). Ensure connection strings are set.
 {{- end }}
 
-== Verify deployment ==
+== Next Steps ==
+{{- if not .Values.global.baseDomain }}
+  - Set global.baseDomain for ingress: --set global.baseDomain=church.example.com
+{{- end }}
+{{- if not .Values.global.ingress.clusterIssuer }}
+  - Enable TLS with cert-manager: --set global.ingress.clusterIssuer=letsencrypt-prod
+{{- end }}
+  - For production: set explicit secrets (ENCRYPTION_KEY, JWT_SECRET, mysql passwords)
+  - Use ExternalSecrets operator for production secret management
+  - See helm/b1stack/README.md for full configuration reference
+
+== Verify ==
   kubectl -n {{ .Release.Namespace }} get pods
-  curl https://{{ .Values.api.ingress.hostname }}/health
-
-== TLS certificates ==
-  kubectl -n {{ .Release.Namespace }} get certificates
-
-  Switch to letsencrypt-prod after staging certs are validated:
-    helm upgrade {{ .Release.Name }} ... \
-      --set 'api.ingress.annotations.cert-manager\.io/cluster-issuer=letsencrypt-prod' \
-      --set 'b1admin.ingress.annotations.cert-manager\.io/cluster-issuer=letsencrypt-prod' \
-      --set 'b1app.ingress.annotations.cert-manager\.io/cluster-issuer=letsencrypt-prod'
-  Then delete the old staging secrets to force renewal:
-    kubectl -n {{ .Release.Namespace }} delete secret \
-      {{ .Release.Name }}-api-tls {{ .Release.Name }}-b1admin-tls {{ .Release.Name }}-b1app-tls
-
-== Known limitations ==
-  - WebSocket port 8087 is not exposed via Ingress (requires TCP ConfigMap on ingress-nginx controller)
-  - B1App uses NEXT_STAGE=staging (external *.staging.churchapps.org APIs)
-  - Secrets are passed via --set flags; use ExternalSecrets operator for production
+{{- if .Values.api.enabled }}
+{{- $host := include "b1stack.hostname" (list . "api" "api") }}
+{{- if $host }}
+{{- $tls := include "b1stack.ingressTls" (list . "api") }}
+  curl {{ if $tls }}https{{ else }}http{{ end }}://{{ $host }}/health
+{{- end }}
+{{- end }}

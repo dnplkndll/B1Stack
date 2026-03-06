@@ -1,4 +1,5 @@
-{{- if and .Values.b1app.enabled .Values.b1app.ingress.enabled }}
+{{- if (include "b1stack.ingressEnabled" (list . "b1app")) }}
+{{- $hostname := include "b1stack.hostname" (list . "b1app" "") }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -7,17 +8,17 @@ metadata:
   labels:
     app: {{ .Release.Name }}-b1app
   annotations:
-    {{- toYaml .Values.b1app.ingress.annotations | nindent 4 }}
+    {{- include "b1stack.ingressAnnotations" (list . "b1app") | nindent 4 }}
 spec:
-  ingressClassName: {{ .Values.b1app.ingress.className | default "nginx" }}
-  {{- if .Values.b1app.ingress.tls }}
+  ingressClassName: {{ include "b1stack.ingressClassName" (list . "b1app") }}
+  {{- if (include "b1stack.ingressTls" (list . "b1app")) }}
   tls:
     - hosts:
-        - {{ .Values.b1app.ingress.hostname }}
+        - {{ $hostname }}
       secretName: {{ .Release.Name }}-b1app-tls
   {{- end }}
   rules:
-    - host: {{ .Values.b1app.ingress.hostname }}
+    - host: {{ $hostname }}
       http:
         paths:
           - path: /

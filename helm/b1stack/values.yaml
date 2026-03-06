@@ -6,10 +6,10 @@
 mysql:
   enabled: true
   auth:
-    rootPassword: "CHANGE_ME"
+    rootPassword: "b1stack-root-dev"
     database: "membership"
     username: "b1stack"
-    password: "CHANGE_ME"
+    password: "b1stack-dev"
   initdbScripts:
     01-init-databases.sql: |
       CREATE DATABASE IF NOT EXISTS membership CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -24,17 +24,31 @@ mysql:
       GRANT ALL PRIVILEGES ON *.* TO 'b1stack'@'%';
       FLUSH PRIVILEGES;
 
-# Global settings shared across all sub-charts (including Bitnami MySQL).
-# imageRegistry: Override to pull all images from a custom registry (e.g. a pull-through cache).
-#   Leave empty to use Docker Hub (default for Bitnami charts).
-#   Note: registry.bitnami.com is Bitnami's commercial/authenticated registry — not suitable here.
-#   To avoid Docker Hub rate limits in production, configure a pull-through cache at the cluster level
-#   (k3s containerd mirrors, ECR pull-through cache, or GCP Artifact Registry remote repos).
 global:
+  # Set baseDomain to auto-derive all service hostnames and enable ingress.
+  # Hostnames use dash separators for wildcard cert compatibility:
+  #   api-{baseDomain}, admin-{baseDomain}, {baseDomain},
+  #   lessons-api-{baseDomain}, ask-api-{baseDomain}
+  # A single *.parent.domain cert covers all services.
+  # When empty: no ingress created (port-forward only).
+  baseDomain: ""
+
+  ingress:
+    # className: ingress controller class — "nginx" (default), "gce" (GKE), "alb" (EKS + AWS ALB Controller)
+    className: "nginx"
+    # tls: false by default so --set baseDomain alone gives working HTTP ingress.
+    # Enable via --set global.ingress.tls=true (or set clusterIssuer, which implies TLS).
+    tls: false
+    annotations: {}
+    # cert-manager ClusterIssuer — auto-added to ingress annotations when set.
+    # Setting this also enables TLS automatically.
+    clusterIssuer: ""
+
+  # imageRegistry: Override to pull all images from a custom registry / pull-through cache.
+  #   Leave empty to use Docker Hub (default for Bitnami charts).
   imageRegistry: ""
   imagePullSecrets: []
   # storageClass: "" uses the cluster default (gp2 on EKS, standard on GKE, hcloud-volumes on Hetzner).
-  # Override per-environment in values.<env>.yaml.
   storageClass: ""
 
 # ChurchApps API
@@ -51,9 +65,8 @@ api:
     socketPort: 8087
   ingress:
     enabled: false
-    # className: ingress controller class — "nginx" (default), "gce" (GKE), "alb" (EKS + AWS Load Balancer Controller)
     className: ""
-    hostname: api.example.com
+    hostname: ""
     tls: false
     annotations: {}
   resources:
@@ -63,67 +76,28 @@ api:
     limits:
       cpu: 500m
       memory: 512Mi
-  # HPA — requires metrics-server running in the cluster.
-  # Verify: kubectl get deployment -n kube-system metrics-server
   autoscaling:
     enabled: false
     minReplicas: 2
     maxReplicas: 10
     targetCPUUtilizationPercentage: 60
     targetMemoryUtilizationPercentage: 80
-    # behavior: optional — tune scale-up/scale-down stabilization windows.
-    # Example for Sunday-morning traffic patterns (fast up, slow down):
-    # behavior:
-    #   scaleUp:
-    #     stabilizationWindowSeconds: 60
-    #     policies:
-    #       - type: Percent
-    #         value: 100
-    #         periodSeconds: 60
-    #   scaleDown:
-    #     stabilizationWindowSeconds: 600
-    #     policies:
-    #       - type: Pods
-    #         value: 1
-    #         periodSeconds: 120
   env:
-    # Core
-    ENVIRONMENT: production        # dev | staging | prod — selects config/<env>.json defaults
-    CORS_ORIGIN: "*"               # Restrict to your domains in production, e.g. "https://example.com"
-
-    # File storage — "disk" stores files on pod local disk (ephemeral!); "S3" uses AWS S3 / GCS via S3-compat API
-    FILE_STORE: disk               # disk | S3
+    ENVIRONMENT: production        # dev | staging | production — selects config/<env>.json defaults
+    CORS_ORIGIN: "*"               # Restrict to your domains in production
+    FILE_STORE: disk               # disk (ephemeral pod storage) | S3 (AWS S3 / GCS via S3-compat API)
     DELIVERY_PROVIDER: local       # local | aws
     # CONTENT_ROOT: ""             # Public base URL for uploaded files (required when FILE_STORE=S3)
-
-    # Email — leave MAIL_SYSTEM empty to disable outbound email
-    # MAIL_SYSTEM: ""              # SES (AWS Simple Email Service) or empty
-    # EMAIL_ON_REGISTRATION: "false"
-    # SUPPORT_EMAIL: "support@yourchurch.com"
-
-    # URLs (needed when API is deployed behind an ingress)
-    # SERVER_PORT: "8084"
-    # SOCKET_URL: ""               # ws(s)://host — internal WebSocket URL used by messaging module
-    # SOCKET_PORT: "8087"
-    # B1ADMIN_ROOT: "https://admin.example.com"   # Used in email links back to admin
-
-    # AI provider — optional, powers Ask feature
+    # MAIL_SYSTEM: ""              # SES (AWS Simple Email Service) or empty to disable
     # AI_PROVIDER: "openrouter"    # openrouter | openai
-
-    # Store / partner integrations — all optional
-    # STORE_API_URL: ""
   secrets:
-    # ── Required ─────────────────────────────────────────────────────────────
-    # Connection strings and secrets are injected via Kubernetes Secrets.
-    # In production, use the ExternalSecrets operator instead of hardcoding values here.
-    ENCRYPTION_KEY: "CHANGE_ME"
-    JWT_SECRET: "CHANGE_ME"
+    # Auto-generated when empty — stable across upgrades via K8s secret lookup.
+    # Set explicitly for deterministic values or production use.
+    ENCRYPTION_KEY: ""
+    JWT_SECRET: ""
 
-    # Database — connection strings per module.
-    # When mysql.enabled=true (default), these are AUTO-DERIVED from mysql.auth
-    # credentials — you do NOT need to set them here.
-    # When mysql.enabled=false, set each to point at your external DB:
-    #   mysql://user:pass@host:3306/dbname
+    # Database — auto-derived from mysql.auth when mysql.enabled=true.
+    # Set explicitly for external DB (mysql://user:pass@host:3306/dbname).
     MEMBERSHIP_CONNECTION_STRING: ""
     ATTENDANCE_CONNECTION_STRING: ""
     CONTENT_CONNECTION_STRING: ""
@@ -160,27 +134,11 @@ api:
 
     # Cross-module database (Doing module reads Membership DB)
     # DOING_MEMBERSHIP_CONNECTION_STRING: "mysql://..."
-  # Scheduling knobs — override in environment-specific values files to target node pools.
   podAnnotations: {}
   imagePullSecrets: []
   nodeSelector: {}
   tolerations: []
   affinity: {}
-  # HPA — requires metrics-server running in the cluster.
-  # Verify: kubectl get deployment -n kube-system metrics-server
-  autoscaling:
-    enabled: false
-    minReplicas: 2
-    maxReplicas: 10
-    targetCPUUtilizationPercentage: 60
-    targetMemoryUtilizationPercentage: 80
-    # behavior: optional — tune scale-up/scale-down stabilization windows.
-    # Example for Sunday-morning traffic patterns (fast up, slow down):
-    # behavior:
-    #   scaleUp:
-    #     stabilizationWindowSeconds: 60
-    #   scaleDown:
-    #     stabilizationWindowSeconds: 600
 
 # B1Admin (church staff dashboard — React SPA served by nginx)
 # NOTE: REACT_APP_* env vars are baked into the JS bundle at build time by Vite.
@@ -195,11 +153,11 @@ b1admin:
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
-    port: 80  # nginx in production image; dev image uses 3101
+    port: 80
   ingress:
     enabled: false
     className: ""
-    hostname: admin.example.com
+    hostname: ""
     tls: false
     annotations: {}
   resources:
@@ -209,15 +167,12 @@ b1admin:
     limits:
       cpu: 200m
       memory: 256Mi
-  # HPA — requires metrics-server. nginx CPU/mem metrics are less meaningful
-  # than for dynamic services; consider connection-based metrics for production.
   autoscaling:
     enabled: false
     minReplicas: 2
     maxReplicas: 5
     targetCPUUtilizationPercentage: 60
     targetMemoryUtilizationPercentage: 80
-    # behavior: {}
   env:
     REACT_APP_STAGE: production
   podAnnotations: {}
@@ -225,12 +180,6 @@ b1admin:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-  autoscaling:
-    enabled: false
-    minReplicas: 2
-    maxReplicas: 6
-    targetCPUUtilizationPercentage: 60
-    targetMemoryUtilizationPercentage: 80
 
 # B1App (public church website / member portal — Next.js SSR)
 b1app:
@@ -246,7 +195,7 @@ b1app:
   ingress:
     enabled: false
     className: ""
-    hostname: example.com
+    hostname: ""
     tls: false
     annotations: {}
   resources:
@@ -256,14 +205,12 @@ b1app:
     limits:
       cpu: 500m
       memory: 512Mi
-  # HPA — requires metrics-server.
   autoscaling:
     enabled: false
     minReplicas: 2
     maxReplicas: 10
     targetCPUUtilizationPercentage: 60
     targetMemoryUtilizationPercentage: 80
-    # behavior: {}
   env:
     NEXT_STAGE: production
   podAnnotations: {}
@@ -271,12 +218,6 @@ b1app:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-  autoscaling:
-    enabled: false
-    minReplicas: 2
-    maxReplicas: 10
-    targetCPUUtilizationPercentage: 60
-    targetMemoryUtilizationPercentage: 80
 
 # LessonsApi (optional — enable separately when needed)
 lessonsapi:
@@ -292,7 +233,7 @@ lessonsapi:
   ingress:
     enabled: false
     className: ""
-    hostname: lessons-api.example.com
+    hostname: ""
     tls: false
     annotations: {}
   resources:
@@ -308,37 +249,23 @@ lessonsapi:
     maxReplicas: 10
     targetCPUUtilizationPercentage: 60
     targetMemoryUtilizationPercentage: 80
-    # behavior: {}
   secrets:
-    CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/lessons"
-    ENCRYPTION_KEY: "CHANGE_ME"
-    JWT_SECRET: "CHANGE_ME"
+    CONNECTION_STRING: ""
+    ENCRYPTION_KEY: ""
+    JWT_SECRET: ""
   podAnnotations: {}
   imagePullSecrets: []
   nodeSelector: {}
   tolerations: []
   affinity: {}
-  autoscaling:
-    enabled: false
-    minReplicas: 1
-    maxReplicas: 4
-    targetCPUUtilizationPercentage: 60
-    targetMemoryUtilizationPercentage: 80
 
 # Database initialisation Job (Helm post-install / post-upgrade hook).
-# Runs tools/dbScripts/*.sql against the bundled MySQL to create tables on first
-# install and apply any new schema on upgrades. Safe to re-run (idempotent SQL).
-# Only active when mysql.enabled=true (bundled MySQL).
 initdb:
   enabled: true
-  # hook-succeeded: delete Job pod after success (keeps cluster clean).
-  # hook-failed: keep Job pod after failure for log inspection.
-  # before-hook-creation: delete old hook Job before creating a new one.
   hookDeletePolicy: "before-hook-creation,hook-succeeded"
-  # Retry up to 3 times before marking the Job as failed.
   backoffLimit: 3
-  # Kill the Job after 10 minutes to avoid hanging installs.
   activeDeadlineSeconds: 600
+
 # AskApi (optional — enable separately when needed)
 askapi:
   enabled: false
@@ -353,7 +280,7 @@ askapi:
   ingress:
     enabled: false
     className: ""
-    hostname: ask-api.example.com
+    hostname: ""
     tls: false
     annotations: {}
   resources:
@@ -369,19 +296,12 @@ askapi:
     maxReplicas: 10
     targetCPUUtilizationPercentage: 60
     targetMemoryUtilizationPercentage: 80
-    # behavior: {}
   secrets:
-    CONNECTION_STRING: "mysql://b1stack:CHANGE_ME@b1stack-mysql:3306/askapi"
-    ENCRYPTION_KEY: "CHANGE_ME"
-    JWT_SECRET: "CHANGE_ME"
+    CONNECTION_STRING: ""
+    ENCRYPTION_KEY: ""
+    JWT_SECRET: ""
   podAnnotations: {}
   imagePullSecrets: []
   nodeSelector: {}
   tolerations: []
   affinity: {}
-  autoscaling:
-    enabled: false
-    minReplicas: 1
-    maxReplicas: 4
-    targetCPUUtilizationPercentage: 60
-    targetMemoryUtilizationPercentage: 80
