@@ -11,13 +11,20 @@ B1Stack deployed successfully!
   B1App:   {{ if .Values.b1app.ingress.tls }}https{{ else }}http{{ end }}://{{ .Values.b1app.ingress.hostname }}
 {{- end }}
 
-== First-time setup ==
-After initial deploy, run database migrations:
-
-  kubectl -n {{ .Release.Namespace }} exec -it \
-    $(kubectl -n {{ .Release.Namespace }} get pod -l app={{ .Release.Name }}-api \
-      -o jsonpath='{.items[0].metadata.name}') \
-    -- npm run initdb
+== Database migrations ==
+{{- if and .Values.mysql.enabled .Values.initdb.enabled }}
+✓ Automatic: the initdb Job runs on every install/upgrade (Helm post hook).
+  Check status:
+    kubectl -n {{ .Release.Namespace }} get jobs -l app={{ .Release.Name }}-initdb
+    kubectl -n {{ .Release.Namespace }} logs job/{{ .Release.Name }}-initdb-{{ .Release.Revision }}
+{{- else }}
+  initdb Job is disabled (initdb.enabled=false or mysql.enabled=false).
+  Run manually:
+    kubectl -n {{ .Release.Namespace }} exec -it \
+      $(kubectl -n {{ .Release.Namespace }} get pod -l app={{ .Release.Name }}-api \
+        -o jsonpath='{.items[0].metadata.name}') \
+      -- sh /app/initdb.sh
+{{- end }}
 
 == Verify deployment ==
   kubectl -n {{ .Release.Namespace }} get pods

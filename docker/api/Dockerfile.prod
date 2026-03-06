@@ -10,10 +10,13 @@ RUN npm run build:prod
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# mysql-client: used by the Helm initdb Job (initdb.sh) to create DB schemas on first deploy.
+RUN apk add --no-cache mysql-client
 COPY services/Api/package.json services/Api/package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY services/Api/config/ ./config/
 COPY services/Api/tools/ ./tools/
+COPY docker/api/initdb.sh ./initdb.sh
 EXPOSE 8084 8087
 CMD ["node", "dist/index.js"]

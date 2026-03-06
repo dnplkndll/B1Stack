@@ -1,0 +1,58 @@
+{{- if and .Values.api.enabled .Values.mysql.enabled .Values.initdb.enabled }}
+# Helm hook Job: runs DB schema initialisation after every install or upgrade.
+# Uses the API image (which contains tools/dbScripts/*.sql and docker/api/initdb.sh).
+# Safe to re-run: SQL scripts use DROP TABLE IF EXISTS + CREATE TABLE.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-initdb-{{ .Release.Revision }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-initdb
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": {{ .Values.initdb.hookDeletePolicy | quote }}
+spec:
+  backoffLimit: {{ .Values.initdb.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.initdb.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-initdb
+    spec:
+      restartPolicy: OnFailure
+      {{- if or .Values.api.imagePullSecrets .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+        {{- end }}
+        {{- range .Values.api.imagePullSecrets }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: initdb
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command: ["/bin/sh", "/app/initdb.sh"]
+          env:
+            - name: MYSQL_HOST
+              value: {{ .Release.Name }}-mysql
+            - name: MYSQL_USER
+              value: {{ .Values.mysql.auth.username | quote }}
+            - name: MYSQL_PORT
+              value: "3306"
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-mysql
+                  key: mysql-password
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+{{- end }}
