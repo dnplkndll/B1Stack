@@ -1,64 +1,91 @@
 /**
- * Baseline load test — 10 concurrent users for 5 minutes.
- * This validates the default chart sizing (mysql.maxConnections=50, DB_CONNECTION_LIMIT=10).
+ * Baseline load test — 10 concurrent users, 5 minutes.
  *
- * Simulates a mix of:
- *   - Public visitors browsing the church site (B1App SSR)
- *   - Members/staff hitting the API (church lookup, service times)
+ * Simulates realistic mix of:
+ *   40% — anonymous public site visitors (church lookup → pages)
+ *   25% — staff using B1Admin (people list, search, profile view)
+ *   20% — staff writing (person updates, attendance reports)
+ *   15% — members using B1App portal (self-service profile, groups, giving)
+ *
+ * Validates the default chart sizing:
+ *   mysql.maxConnections=50, api.replicaCount=1, DB_CONNECTION_LIMIT=10
  *
  * Run:
- *   k6 run --env BASE_URL=https://api-b1-test.hz.ledoweb.com load-tests/scenarios/10-users.js
+ *   k6 run --env BASE_URL=http://localhost:8084 load-tests/scenarios/10-users.js
  *
- * Pass credentials for authenticated endpoints:
- *   k6 run --env BASE_URL=... --env TEST_EMAIL=admin@demo.church --env TEST_PASSWORD=... ...
+ * While running, watch MySQL in another terminal:
+ *   watch -n2 'docker exec church-mysql-1 sh -c \
+ *     "mysql -uroot -pb1stack_root -e \"SHOW STATUS LIKE '"'"'Threads_connected'"'"';\""'
  */
-import http from 'k6/http';
-import { check, sleep } from 'k6';
-import { BASE_URL, THRESHOLDS, churchLookup, randomBetween } from '../lib/common.js';
+import { sleep } from 'k6';
+import {
+  smokeCheck, login, churchLookup, publicPages,
+  staffPeopleList, staffPeopleSearch, staffPersonDetail, staffPersonUpdate,
+  staffGroupList, staffAttendanceReport,
+  memberViewProfile, memberUpdateProfile, memberBrowseGroups,
+  viewFunds, randomBetween, pickRandom, PERSON_IDS, THRESHOLDS,
+} from '../lib/common.js';
 
 export const options = {
-  // Ramp up to 10 VUs over 30s, hold for 4 minutes, ramp down
   stages: [
-    { duration: '30s', target: 10 },
-    { duration: '4m',  target: 10 },
-    { duration: '30s', target: 0  },
+    { duration: '30s', target: 10 },  // warm up
+    { duration: '4m',  target: 10 },  // hold steady
+    { duration: '30s', target: 0  },  // ramp down
   ],
   thresholds: THRESHOLDS,
 };
 
 export function setup() {
-  // Verify target is reachable before wasting a full test run
-  const health = http.get(`${BASE_URL}/health`);
-  if (health.status !== 200) {
-    throw new Error(`API not healthy: ${health.status} — aborting test`);
-  }
+  smokeCheck();
+  const tokens = login();
+  if (!tokens) throw new Error('Login failed in setup — check TEST_EMAIL/TEST_PW');
+  return tokens;
 }
 
-export default function () {
-  // Weight of each scenario per VU iteration (roughly matches real traffic mix):
+export default function (tokens) {
   const roll = Math.random();
 
-  if (roll < 0.5) {
-    // 50% — public site hit (church lookup → the root SSR trigger)
+  if (roll < 0.40) {
+    // ── Anonymous public visitor ──────────────────────────────────────────────
     churchLookup();
+    sleep(randomBetween(1, 2));
+    if (Math.random() < 0.5) publicPages(tokens);
+    if (Math.random() < 0.3) viewFunds();
     sleep(randomBetween(2, 5));
 
-  } else if (roll < 0.8) {
-    // 30% — service times listing
-    const res = http.get(
-      `${BASE_URL}/membership/services`,
-      { tags: { type: 'api' } }
-    );
-    check(res, { 'services 200 or 404': (r) => r.status === 200 || r.status === 404 });
+  } else if (roll < 0.65) {
+    // ── Staff: read-only B1Admin work ─────────────────────────────────────────
+    const r2 = Math.random();
+    if (r2 < 0.4) {
+      staffPeopleList(tokens);
+    } else if (r2 < 0.7) {
+      staffPeopleSearch(tokens, pickRandom(['Smith', 'Johnson', 'Williams', 'Brown', 'Jones']));
+    } else {
+      staffPersonDetail(tokens, pickRandom(PERSON_IDS));
+    }
+    sleep(randomBetween(2, 4));
+    staffGroupList(tokens);
     sleep(randomBetween(1, 3));
 
+  } else if (roll < 0.85) {
+    // ── Staff: write operations (person update, attendance) ───────────────────
+    if (Math.random() < 0.5) {
+      // Update a person record
+      staffPersonUpdate(tokens, pickRandom(PERSON_IDS));
+    } else {
+      // View attendance report (DB-heavy read)
+      staffAttendanceReport(tokens);
+    }
+    sleep(randomBetween(2, 5));
+
   } else {
-    // 20% — group/event listing (common member portal action)
-    const res = http.get(
-      `${BASE_URL}/membership/groups`,
-      { tags: { type: 'api' } }
-    );
-    check(res, { 'groups 200 or 401': (r) => r.status === 200 || r.status === 401 });
-    sleep(randomBetween(1, 4));
+    // ── Member portal: self-service ───────────────────────────────────────────
+    memberViewProfile(tokens);
+    sleep(randomBetween(1, 2));
+    memberBrowseGroups(tokens);
+    if (Math.random() < 0.3) {
+      memberUpdateProfile(tokens);  // self-edit own profile
+    }
+    sleep(randomBetween(3, 6));
   }
 }

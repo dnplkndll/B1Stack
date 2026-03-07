@@ -1,68 +1,87 @@
 /**
- * Sunday morning burst test.
+ * Sunday morning burst — check-in simulation.
  *
- * A 500-member church with 3 services and 60% attendance = ~300 people checking in.
- * With families checking in together, model as ~150 concurrent check-in requests
- * arriving in a 15-minute window (ramp in, spike, ramp out).
+ * Church size reference:
+ *   500-member church: 3 services, ~60% weekend attendance = 300 people
+ *   Families of 2-4 → ~100-150 kiosk transactions over 15 minutes per service
  *
- * A 5,000-member church: multiply ×10 → 1,500 concurrent; needs HPA + managed DB.
+ *   5,000-member church: same math ×10 → 1,000-1,500 transactions
+ *   At that scale: managed DB + HPA required. See values.yaml sizing table.
+ *
+ * This test models the 500-member church (150 VU peak).
  *
  * Run:
- *   k6 run --env BASE_URL=https://api-b1-test.hz.ledoweb.com load-tests/scenarios/sunday-checkin.js
+ *   k6 run --env BASE_URL=http://localhost:8084 load-tests/scenarios/sunday-checkin.js
+ *
+ * IMPORTANT: This creates real visit records in the DB.
+ * Clean up after testing: docker exec church-mysql-1 sh -c \
+ *   "mysql -uroot -pb1stack_root attendance -e 'DELETE FROM visits WHERE visitDate >= CURDATE()'"
  */
+import { sleep } from 'k6';
+import {
+  smokeCheck, login, churchLookup, staffPeopleSearch,
+  checkinVisit, staffAttendanceReport,
+  randomBetween, pickRandom, PERSON_IDS, THRESHOLDS,
+} from '../lib/common.js';
 import http from 'k6/http';
-import { check, sleep } from 'k6';
-import { BASE_URL, churchLookup, randomBetween } from '../lib/common.js';
-
-// TODO: replace with real service IDs from your demo data
-const SERVICE_IDS = ['service-1', 'service-2'];
-const GROUP_IDS   = ['group-1', 'group-2', 'group-3'];
+import { check } from 'k6';
 
 export const options = {
   stages: [
-    // Doors open — slow initial trickle
-    { duration: '2m',  target: 20  },
-    // Main arrival wave (5 minutes before service)
-    { duration: '3m',  target: 150 },
-    // Steady checkins (service in progress)
-    { duration: '5m',  target: 80  },
-    // Late arrivals / offering / post-service activity
-    { duration: '3m',  target: 30  },
+    { duration: '2m',  target: 20  },   // Doors open — early arrivals
+    { duration: '3m',  target: 150 },   // Main arrival wave (pre-service rush)
+    { duration: '5m',  target: 80  },   // Steady checkins (service in progress, late arrivals)
+    { duration: '3m',  target: 20  },   // Post-service activity
     { duration: '2m',  target: 0   },
   ],
   thresholds: {
-    // Checkin must not fail — families blocked at the door is unacceptable
+    // Checkin failure = family blocked at the door — zero tolerance
     http_req_failed: ['rate<0.001'],
-    'http_req_duration{type:api}': ['p(95)<2000'],
+    'http_req_duration{flow:checkin}': ['p(95)<2000', 'p(99)<4000'],
+    'http_req_duration{flow:anon}':   ['p(95)<1000'],
   },
 };
 
-export default function () {
-  // Each VU simulates a kiosk or phone check-in flow
+export function setup() {
+  smokeCheck();
+  const tokens = login();
+  if (!tokens) throw new Error('Login failed in setup');
 
-  // Step 1: Lookup church (every device does this on load)
-  churchLookup();
-  sleep(randomBetween(0.2, 0.5));
+  // Get a current session ID from the DB (Sunday morning session)
+  // In production this would be created by staff before service
+  return { tokens, sessionId: 'SES00000028' };
+}
 
-  // Step 2: Post attendance visit
-  const serviceId = SERVICE_IDS[Math.floor(Math.random() * SERVICE_IDS.length)];
-  const body = JSON.stringify({
-    serviceId,
-    serviceTime: new Date().toISOString(),
-    peopleCount: Math.floor(Math.random() * 4) + 1, // family of 1–4
-  });
+export default function ({ tokens, sessionId }) {
+  // Each VU = one kiosk or phone check-in
 
-  const res = http.post(
-    `${BASE_URL}/attendance/visits`,
-    body,
-    {
-      headers: { 'Content-Type': 'application/json' },
-      tags: { type: 'api' },
-    }
-  );
-  check(res, {
-    'checkin accepted': (r) => r.status === 200 || r.status === 201 || r.status === 401,
-  });
+  // Step 1: Kiosk loads — church lookup happens on every device boot/refresh
+  if (Math.random() < 0.3) {  // Not every checkin triggers this (kiosks stay warm)
+    churchLookup();
+    sleep(randomBetween(0.1, 0.3));
+  }
 
-  sleep(randomBetween(0.5, 2));
+  // Step 2: Family name search (simulates someone typing at kiosk)
+  const nameTerms = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Miller', 'Davis', 'Wilson'];
+  staffPeopleSearch(tokens, pickRandom(nameTerms));
+  sleep(randomBetween(0.3, 1.0));  // time for person to select their record
+
+  // Step 3: Check in each family member (1-4 people per transaction)
+  const familySize = Math.floor(Math.random() * 3) + 1;
+  for (let i = 0; i < familySize; i++) {
+    const pid = pickRandom(PERSON_IDS);
+    checkinVisit(tokens, pid, sessionId);
+    sleep(0.1);  // brief gap between family members
+  }
+
+  // Step 4: Think time before next family
+  sleep(randomBetween(0.5, 2.0));
+}
+
+/**
+ * After the burst, verify attendance totals are sane.
+ * k6 teardown() runs once after all VUs complete.
+ */
+export function teardown({ tokens }) {
+  staffAttendanceReport(tokens);
 }

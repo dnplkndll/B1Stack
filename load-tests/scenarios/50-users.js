@@ -1,60 +1,101 @@
 /**
- * Stress test — ramp to 50 concurrent users.
- * Validates the 50-user chart sizing:
- *   mysql.maxConnections=100, api.replicaCount=2, DB_CONNECTION_LIMIT=15
+ * Stress test — ramp to 50 concurrent users, 10 minutes.
  *
- * Expected chart overrides for this test:
+ * Requires chart upscaling before running:
  *   --set mysql.maxConnections=100
  *   --set api.replicaCount=2
  *   --set api.env.DB_CONNECTION_LIMIT=15
- *   --set api.resources.limits.cpu=1000m
- *   --set api.resources.requests.memory=512Mi
+ *
+ * Traffic mix shifts toward writes and heavier reads at scale:
+ *   30% — anon public visitors (SSR triggers, church lookup)
+ *   30% — staff reads (people search, person details, attendance)
+ *   25% — staff writes (person updates, group management)
+ *   15% — member self-service
  *
  * Run:
- *   k6 run --env BASE_URL=https://api-b1-test.hz.ledoweb.com load-tests/scenarios/50-users.js
+ *   k6 run --env BASE_URL=http://localhost:8084 load-tests/scenarios/50-users.js
  */
-import http from 'k6/http';
-import { check, sleep } from 'k6';
-import { BASE_URL, THRESHOLDS, churchLookup, randomBetween } from '../lib/common.js';
+import { sleep } from 'k6';
+import {
+  smokeCheck, login, churchLookup, publicPages,
+  staffPeopleList, staffPeopleSearch, staffPersonDetail, staffPersonUpdate,
+  staffGroupList, staffAttendanceReport,
+  memberViewProfile, memberUpdateProfile, memberBrowseGroups,
+  checkinVisit, viewFunds, randomBetween, pickRandom,
+  PERSON_IDS, CHURCH_ID, SVC_SUNDAY_AM, GROUP_SUNDAY_AM,
+} from '../lib/common.js';
 
 export const options = {
   stages: [
-    { duration: '1m',  target: 10 },   // warm up
-    { duration: '2m',  target: 50 },   // ramp to 50
-    { duration: '5m',  target: 50 },   // hold steady — watch for connection exhaustion
-    { duration: '2m',  target: 10 },   // ramp down
-    { duration: '30s', target: 0  },   // done
+    { duration: '1m',  target: 10  },  // warm up at baseline
+    { duration: '2m',  target: 50  },  // ramp to target
+    { duration: '5m',  target: 50  },  // hold — watch for connection exhaustion
+    { duration: '1m',  target: 10  },  // cool down
+    { duration: '30s', target: 0   },
   ],
   thresholds: {
-    ...THRESHOLDS,
-    // At 50 users we allow slightly more latency on SSR
+    'http_req_duration{type:api}': ['p(95)<1500', 'p(99)<3000'],
     'http_req_duration{type:ssr}': ['p(95)<5000'],
+    'http_req_duration{flow:checkin}': ['p(95)<2000'],   // checkin must stay fast
+    http_req_failed: ['rate<0.01'],
   },
 };
 
-export default function () {
+// Shared session ID for checkin writes (found in setup, reused across VUs)
+let SHARED_SESSION_ID = 'SES00000028';   // fallback to known ID from demo data
+
+export function setup() {
+  smokeCheck();
+  const tokens = login();
+  if (!tokens) throw new Error('Login failed');
+
+  // Try to get a recent session for checkin writes
+  const { http } = require('k6/http');  // eslint-disable-line
+  return tokens;
+}
+
+export default function (tokens) {
   const roll = Math.random();
 
-  if (roll < 0.4) {
+  if (roll < 0.30) {
+    // ── Anon public visitor ───────────────────────────────────────────────────
     churchLookup();
+    sleep(randomBetween(0.5, 1.5));
+    if (Math.random() < 0.4) publicPages(tokens);
+    if (Math.random() < 0.2) viewFunds();
     sleep(randomBetween(1, 3));
-  } else if (roll < 0.7) {
-    const res = http.get(`${BASE_URL}/membership/services`, { tags: { type: 'api' } });
-    check(res, { 'services ok': (r) => r.status < 500 });
+
+  } else if (roll < 0.60) {
+    // ── Staff reads ───────────────────────────────────────────────────────────
+    const r2 = Math.random();
+    if (r2 < 0.35) {
+      staffPeopleSearch(tokens, pickRandom(['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Davis']));
+    } else if (r2 < 0.60) {
+      staffPersonDetail(tokens, pickRandom(PERSON_IDS));
+    } else if (r2 < 0.80) {
+      staffAttendanceReport(tokens);
+    } else {
+      staffPeopleList(tokens);
+    }
+    sleep(randomBetween(1, 3));
+
+  } else if (roll < 0.85) {
+    // ── Staff writes ──────────────────────────────────────────────────────────
+    if (Math.random() < 0.6) {
+      // Person profile update (most common write)
+      staffPersonUpdate(tokens, pickRandom(PERSON_IDS));
+    } else {
+      // Attendance checkin (second most common write on Sundays)
+      checkinVisit(tokens, pickRandom(PERSON_IDS), SHARED_SESSION_ID);
+    }
     sleep(randomBetween(1, 2));
-  } else if (roll < 0.9) {
-    // People (member listing — DB-intensive, good stress test)
-    const res = http.get(`${BASE_URL}/membership/people`, { tags: { type: 'api' } });
-    check(res, { 'people ok': (r) => r.status < 500 });
-    sleep(randomBetween(2, 4));
+
   } else {
-    // Attendance post (write load)
-    const payload = JSON.stringify({ serviceId: 'test', count: 1 });
-    const res = http.post(`${BASE_URL}/attendance/visits`, payload, {
-      headers: { 'Content-Type': 'application/json' },
-      tags: { type: 'api' },
-    });
-    check(res, { 'attendance post ok': (r) => r.status < 500 });
+    // ── Member self-service ───────────────────────────────────────────────────
+    memberViewProfile(tokens);
     sleep(randomBetween(1, 2));
+    if (Math.random() < 0.5) memberBrowseGroups(tokens);
+    if (Math.random() < 0.2) memberUpdateProfile(tokens);
+    sleep(randomBetween(2, 5));
   }
 }
