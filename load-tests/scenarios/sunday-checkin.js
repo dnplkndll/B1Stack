@@ -21,10 +21,8 @@ import { sleep } from 'k6';
 import {
   smokeCheck, login, churchLookup, staffPeopleSearch,
   checkinVisit, staffAttendanceReport,
-  randomBetween, pickRandom, PERSON_IDS, THRESHOLDS,
+  randomBetween, pickRandom, PERSON_IDS,
 } from '../lib/common.js';
-import http from 'k6/http';
-import { check } from 'k6';
 
 export const options = {
   stages: [

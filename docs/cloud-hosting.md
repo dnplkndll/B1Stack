@@ -34,13 +34,13 @@ See [Sizing](#sizing) for scaling to 50+ users.
 
 | Users | API replicas | DB max_conn | Min node size           | Storage |
 |-------|--------------|-------------|-------------------------|---------|
-| 10    | 1            | 50          | 2 vCPU / 4 GB RAM       | 20 GB   |
+| 10    | 1            | 100         | 2 vCPU / 4 GB RAM       | 20 GB   |
 | 50    | 2            | 100         | 4 vCPU / 8 GB RAM       | 50 GB   |
 | 200   | 4            | 200         | 8 vCPU / 16 GB RAM (×2) | 100 GB  |
 | 500+  | HPA          | managed DB  | dedicated DB node       | managed |
 
-> **TODO after load testing**: Validate these numbers with k6 results from `load-tests/`.
-> Actual API connection pool behaviour and Next.js memory growth need to be measured.
+> **Validated**: 10-user baseline measured with k6 against 500-member dataset.
+> Peak MySQL connections: 39 (of 100 max). API p(95) latency: 25ms. See [Load Testing](./load-testing.md).
 
 ### What drives load for a church
 

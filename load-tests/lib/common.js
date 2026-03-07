@@ -11,7 +11,7 @@
  */
 
 import http from 'k6/http';
-import { check, sleep } from 'k6';
+import { check } from 'k6';
 
 // ── Environment (override with --env flags) ──────────────────────────────────
 export const BASE_URL    = __ENV.BASE_URL    || 'http://localhost:8084';
@@ -214,26 +214,6 @@ export function checkinVisit(tokens, personId, sessionId) {
     },
   });
   return res;
-}
-
-/**
- * Checkin: full kiosk flow — lookup church → find person → record visit.
- * This is the complete path that triggered "Too many connections" on prod.
- */
-export function kioskFlow(tokens, sessionId) {
-  // Step 1: church lookup (always happens on kiosk load)
-  churchLookup();
-  sleep(randomBetween(0.1, 0.3));
-
-  // Step 2: search for a person by name (simulates typing name at kiosk)
-  const terms = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones'];
-  staffPeopleSearch(tokens, terms[Math.floor(Math.random() * terms.length)]);
-  sleep(randomBetween(0.2, 0.5));
-
-  // Step 3: record the visit
-  const pid = PERSON_IDS[Math.floor(Math.random() * PERSON_IDS.length)];
-  checkinVisit(tokens, pid, sessionId);
-  sleep(randomBetween(0.5, 1.5));
 }
 
 // ── Member portal flows (B1App — member self-service) ────────────────────────

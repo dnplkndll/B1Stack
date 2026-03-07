@@ -15,8 +15,8 @@ docker run --rm -i grafana/k6 run - < load-tests/scenarios/10-users.js
 ## Quick start
 
 ```bash
-# Set target base URL
-export BASE_URL=https://b1-test.hz.ledoweb.com
+# Set target base URL (local stack — default if omitted)
+export BASE_URL=http://localhost:8084
 
 # Run 10-user baseline test
 k6 run --env BASE_URL=$BASE_URL load-tests/scenarios/10-users.js

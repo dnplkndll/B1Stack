@@ -1,18 +1,22 @@
 # Load Testing Guide
 
-## ⚠️ On sizing numbers: these are starting points, not facts
+## Measured baseline: 10 concurrent users, 500-member dataset
 
-All resource sizing in `values.yaml` (MySQL `maxConnections`, API `resources`, etc.)
-is based on general Node.js/MySQL best practices, **not measured data from this app**.
+k6 10-user test results (5 min run, 500 people, 564 iterations):
 
-The actual numbers you need depend on:
-- How many DB queries the API makes per request
-- Whether the ChurchApps API uses connection pooling correctly
-- Next.js SSR memory growth under load
-- Cold-start vs warm behaviour
+| Metric                         | Result     | Threshold  |
+|--------------------------------|------------|------------|
+| API p(95) latency              | 25ms       | < 1,000ms  |
+| API p(99) latency              | 35ms       | < 2,000ms  |
+| Failure rate                   | 0%         | < 0.5%     |
+| MySQL `Max_used_connections`   | 39 / 100   | < 80       |
+| Checks passed                  | 1211/1211  | all        |
 
-**Run the load tests below, review the results, then tune the chart.**
-The sizing table in `values.yaml` will be updated with real numbers after testing.
+**Key finding**: The API pool is hardcoded to 10 connections per module in `MultiDatabasePool.ts`
+(7 modules × 10 = 70 theoretical max per pod). At 10 users only 39 connections were used.
+`mysql.maxConnections=100` gives 60% headroom for a single API replica.
+
+50-user results are not yet measured — run `50-users.js` to capture them.
 
 ---
 

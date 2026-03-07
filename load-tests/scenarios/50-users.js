@@ -22,7 +22,7 @@ import {
   staffGroupList, staffAttendanceReport,
   memberViewProfile, memberUpdateProfile, memberBrowseGroups,
   checkinVisit, viewFunds, randomBetween, pickRandom,
-  PERSON_IDS, CHURCH_ID, SVC_SUNDAY_AM, GROUP_SUNDAY_AM,
+  PERSON_IDS,
 } from '../lib/common.js';
 
 export const options = {
@@ -41,16 +41,13 @@ export const options = {
   },
 };
 
-// Shared session ID for checkin writes (found in setup, reused across VUs)
-let SHARED_SESSION_ID = 'SES00000028';   // fallback to known ID from demo data
+const SHARED_SESSION_ID = 'SES00000028';   // known session from demo data
 
 export function setup() {
   smokeCheck();
   const tokens = login();
   if (!tokens) throw new Error('Login failed');
 
-  // Try to get a recent session for checkin writes
-  const { http } = require('k6/http');  // eslint-disable-line
   return tokens;
 }
 

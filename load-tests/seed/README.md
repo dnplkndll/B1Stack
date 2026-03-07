@@ -26,5 +26,8 @@ docker compose exec -T mysql mysql -uroot -pb1stack-root-dev membership \
 Seed data covers only the `membership` database (people, households, groups, services, service times).
 The `attendance` database gets populated by the Sunday check-in load test itself.
 
-TODO: Research exact ChurchApps table schema from the API initdb migrations before running.
-The column names below are inferred from the API codebase — verify before applying.
+Schema is verified against the live ChurchApps API initdb migrations. Key columns:
+- `people`: id, churchId, householdId, firstName, lastName, displayName, email, membershipStatus, gender
+- `households`: id, churchId, name
+- `` `groups` ``: id, churchId, categoryName, name, trackAttendance, about
+- `services`: id, churchId, name

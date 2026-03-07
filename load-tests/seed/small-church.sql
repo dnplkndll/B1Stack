@@ -38,10 +38,6 @@ CREATE PROCEDURE seed_sm_people()
 BEGIN
   DECLARE i INT DEFAULT 87;
   DECLARE hh_num INT;
-  DECLARE first_names VARCHAR(500);
-  DECLARE last_names  VARCHAR(500);
-  SET first_names = 'James,Mary,John,Patricia,Robert,Jennifer,Michael,Linda,William,Barbara,David,Susan,Richard,Jessica,Joseph,Sarah,Thomas,Karen,Charles,Lisa,Christopher,Nancy,Daniel,Betty,Matthew,Margaret,Anthony,Sandra,Mark,Dorothy';
-  SET last_names  = 'Smith,Johnson,Williams,Brown,Jones,Garcia,Miller,Davis,Wilson,Moore,Taylor,Anderson,Thomas,Jackson,White,Harris,Martin,Thompson,Wood,Martinez';
   WHILE i <= 500 DO
     SET hh_num = 28 + FLOOR((i - 87) / 2.5);
     INSERT IGNORE INTO people (
@@ -90,8 +86,6 @@ DELIMITER $$
 CREATE PROCEDURE seed_sm_members()
 BEGIN
   DECLARE i INT DEFAULT 1;
-  DECLARE grp_ids VARCHAR(500);
-  SET grp_ids = 'GRP00000001,GRP00000004,GRP00000010,GRP00000011,GRP00000012,GRP00000013,GRP00000015,GRP00000016,GRP00000017,GRP00000019,GRP00000020,GRP00000021,GRP00000022,GRP00000023,GRP0000000b';
   WHILE i <= 500 DO
     -- Each person in 1-2 groups
     INSERT IGNORE INTO groupMembers (id, churchId, groupId, personId, leader)
