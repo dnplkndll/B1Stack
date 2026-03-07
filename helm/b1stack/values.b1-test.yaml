@@ -1,7 +1,6 @@
 # B1-Test environment overrides for hz.ledoweb.com
 #
 # Deploy:
-#   helm dep update helm/b1stack
 #   helm upgrade --install b1stack helm/b1stack \
 #     --kube-context hetzner-ledo --namespace b1-test --create-namespace \
 #     -f helm/b1stack/values.yaml -f helm/b1stack/values.b1-test.yaml \

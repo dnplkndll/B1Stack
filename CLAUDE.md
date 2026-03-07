@@ -101,5 +101,5 @@ Running `make aggregate` (or `gitaggregate -c repos.yaml`) clones each repo, set
 
 ### Other notes
 
-- Helm chart uses `public.ecr.aws/bitnami/mysql` (Bitnami removed Docker Hub tags).
+- Helm chart uses official `mysql:8.0` image (plain StatefulSet, no sub-charts, no Bitnami).
 - See [CONTRIBUTING.md](CONTRIBUTING.md) for contributor workflow, [ROADMAP.md](ROADMAP.md) for feature priorities.
