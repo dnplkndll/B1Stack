@@ -22,6 +22,7 @@
   target: origin main
   merges:
     - upstream main
+    - origin fix/missing-initdb-tables
 
 ./services/B1Admin:
   remotes:
