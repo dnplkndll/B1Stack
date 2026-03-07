@@ -1,0 +1,30 @@
+FROM node:22-alpine AS builder
+WORKDIR /app
+# git is required by postbuild step (git checkout src/instrumentation*.ts)
+# In Docker, git checkout fails silently (no .git repo), leaving prod instrumentation in place — correct.
+RUN apk add --no-cache git
+COPY services/B1App/package.json services/B1App/package-lock.json ./
+# npm install (not ci): upstream lock file drifts — see B1Admin for same pattern
+RUN npm install && npm run postinstall
+COPY services/B1App/next.config.mjs services/B1App/tsconfig.json \
+     services/B1App/sentry.edge.config.ts services/B1App/sentry.server.config.ts ./
+COPY services/B1App/src/ ./src/
+COPY services/B1App/public/ ./public/
+
+ARG NEXT_STAGE=staging
+ENV NEXT_STAGE=$NEXT_STAGE NODE_ENV=production
+RUN npm run build
+
+FROM node:22-alpine AS runner
+WORKDIR /app
+ARG NEXT_STAGE=staging
+ENV NODE_ENV=production NEXT_STAGE=$NEXT_STAGE
+COPY services/B1App/package.json services/B1App/package-lock.json ./
+# --ignore-scripts: postinstall calls copyfiles (devDep) to copy locales/CSS into public/.
+# Those files are already present in the .next build copied from builder — skip here.
+RUN npm install --omit=dev --ignore-scripts
+COPY services/B1App/next.config.mjs ./
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+EXPOSE 3301
+CMD ["npx", "next", "start", "-p", "3301"]

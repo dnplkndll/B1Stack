@@ -1,0 +1,37 @@
+{{- if and .Values.b1admin.enabled .Values.b1admin.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ .Release.Name }}-b1admin
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-b1admin
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ .Release.Name }}-b1admin
+  minReplicas: {{ .Values.b1admin.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.b1admin.autoscaling.maxReplicas }}
+  metrics:
+    {{- if gt (int .Values.b1admin.autoscaling.targetCPUUtilizationPercentage) 0 }}
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.b1admin.autoscaling.targetCPUUtilizationPercentage }}
+    {{- end }}
+    {{- if gt (int .Values.b1admin.autoscaling.targetMemoryUtilizationPercentage) 0 }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.b1admin.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
+  {{- if .Values.b1admin.autoscaling.behavior }}
+  behavior:
+    {{- toYaml .Values.b1admin.autoscaling.behavior | nindent 4 }}
+  {{- end }}
+{{- end }}

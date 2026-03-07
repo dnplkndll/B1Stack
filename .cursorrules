@@ -1,0 +1,35 @@
+## B1Stack — ChurchApps Local Dev & K8s Orchestration
+
+This repo orchestrates the ChurchApps B1 product suite. It does NOT contain application source code — the services live in `services/`, managed by git-aggregator via `repos.yaml`.
+
+### Key Architecture
+- `services/` — cloned service repos (gitignored, managed by `gitaggregate -c repos.yaml`)
+- `docker/` — Dockerfiles for each service (volume-mount pattern for hot-reload)
+- `mysql/init/` — SQL run by MySQL on first start (creates databases, not tables)
+- `scripts/` — setup, init-db, health-check, reset-db, wait-ready
+- `helm/b1stack/` — Helm umbrella chart (flat, no sub-charts; deployed on Hetzner b1-test)
+- `Makefile` — DX shortcuts (`make up`, `make test`, `make health`, etc.)
+
+### Services & Ports
+| Service    | Port(s)   | Framework       |
+|-----------|-----------|-----------------|
+| mysql     | 3306      | MySQL 8.0       |
+| api       | 8084/8087 | Node/tsx watch   |
+| b1admin   | 3101      | React/Vite      |
+| b1app     | 3301      | Next.js         |
+| lessonsapi| 8090      | Node/nodemon (profile: full) |
+| askapi    | 8097      | Node/nodemon (profile: full) |
+
+### Connection Strings
+- **Api**: Per-module env vars: `MEMBERSHIP_CONNECTION_STRING`, `ATTENDANCE_CONNECTION_STRING`, etc.
+- **LessonsApi/AskApi**: Single `CONNECTION_STRING` env var
+- **B1Admin env prefix**: `REACT_APP_*` (read at Vite start, restart required)
+- **B1App env prefix**: `NEXT_PUBLIC_*`
+
+### Rules
+- Work in `services/` via feature branches — see CONTRIBUTING.md for git-aggregator workflow
+- Use `make` targets instead of raw docker compose commands
+- Named volumes prevent host node_modules from shadowing container's
+- Hot-reload uses polling on macOS: `CHOKIDAR_USEPOLLING` / `WATCHPACK_POLLING`
+- Helm chart uses `public.ecr.aws/bitnami/mysql` (not Docker Hub)
+- Run `make init` after first `make up` to create DB tables

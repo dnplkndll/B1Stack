@@ -1,0 +1,39 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Requires: expose port 9229 in docker-compose.yml and add --inspect=0.0.0.0:9229 to API dev command
+      // See CONTRIBUTING.md "Debugging" section for setup steps
+      "name": "Attach to API (Docker)",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "restart": true,
+      "remoteRoot": "/app",
+      "localRoot": "${workspaceFolder}/services/Api",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "Playwright: B1Admin",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/services/B1Admin",
+      "program": "${workspaceFolder}/services/B1Admin/node_modules/.bin/playwright",
+      "args": ["test", "--headed"],
+      "env": {
+        "BASE_URL": "http://localhost:3101"
+      }
+    },
+    {
+      "name": "Playwright: B1App",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/services/B1App",
+      "program": "${workspaceFolder}/services/B1App/node_modules/.bin/playwright",
+      "args": ["test", "--headed"],
+      "env": {
+        "BASE_URL": "http://localhost:3301"
+      }
+    }
+  ]
+}

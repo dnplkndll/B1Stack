@@ -1,0 +1,140 @@
+{{- if .Values.mysql.enabled -}}
+{{- $fullname := printf "%s-mysql" .Release.Name -}}
+---
+# Secret — credentials for the MySQL container and for b1stack.connStr helper lookup
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "b1stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+type: Opaque
+stringData:
+  mysql-root-password: {{ .Values.mysql.auth.rootPassword | required "mysql.auth.rootPassword is required when mysql.enabled=true" | quote }}
+  mysql-password:      {{ .Values.mysql.auth.password     | required "mysql.auth.password is required when mysql.enabled=true"     | quote }}
+  mysql-user:          {{ .Values.mysql.auth.username      | required "mysql.auth.username is required when mysql.enabled=true"      | quote }}
+---
+# ConfigMap — SQL files mounted into /docker-entrypoint-initdb.d/
+# Processed once on first startup (when /var/lib/mysql is empty).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-init
+  labels:
+    {{- include "b1stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+data:
+{{ toYaml .Values.mysql.initdbScripts | indent 2 }}
+---
+# Service — ClusterIP accessible as {release}-mysql:3306 within the cluster.
+# Name matches what b1stack.connStr builds for connection strings.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "b1stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+spec:
+  type: ClusterIP
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: mysql
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: mysql
+    app.kubernetes.io/instance: {{ .Release.Name }}
+---
+# StatefulSet — single MySQL 8.0 replica with persistent storage.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "b1stack.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+spec:
+  serviceName: {{ $fullname }}
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mysql
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mysql
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: "{{ .Values.mysql.image.repository }}:{{ .Values.mysql.image.tag }}"
+          imagePullPolicy: {{ .Values.mysql.image.pullPolicy }}
+          args:
+            - --default-authentication-plugin=mysql_native_password
+            # Connection capacity — controlled by values: mysql.maxConnections / waitTimeout / interactiveTimeout.
+            # See values.yaml sizing table before changing these.
+            - --max-connections={{ .Values.mysql.maxConnections | default 50 }}
+            - --wait-timeout={{ .Values.mysql.waitTimeout | default 300 }}
+            - --interactive-timeout={{ .Values.mysql.interactiveTimeout | default 300 }}
+          ports:
+            - name: mysql
+              containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $fullname }}
+                  key: mysql-root-password
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $fullname }}
+                  key: mysql-user
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $fullname }}
+                  key: mysql-password
+            - name: MYSQL_DATABASE
+              value: {{ .Values.mysql.auth.database | quote }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            {{- toYaml .Values.mysql.resources | nindent 12 }}
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "mysqladmin ping -uroot -p$MYSQL_ROOT_PASSWORD"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "mysqladmin ping -uroot -p$MYSQL_ROOT_PASSWORD"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+      volumes:
+        - name: init-scripts
+          configMap:
+            name: {{ $fullname }}-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.mysql.persistence.storageClass }}
+        storageClassName: {{ .Values.mysql.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.mysql.persistence.size | quote }}
+{{- end }}

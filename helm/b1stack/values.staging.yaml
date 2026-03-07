@@ -1,0 +1,29 @@
+# Staging overrides for B1Stack Helm chart
+# Usage: helm upgrade --install b1stack helm/b1stack -f helm/b1stack/values.staging.yaml
+
+api:
+  ingress:
+    enabled: true
+    hostname: api.staging.b1stack.example.com
+  env:
+    ENVIRONMENT: staging
+
+b1admin:
+  ingress:
+    enabled: true
+    hostname: admin.staging.b1stack.example.com
+  env:
+    REACT_APP_STAGE: staging
+
+b1app:
+  ingress:
+    enabled: true
+    hostname: staging.b1stack.example.com
+  env:
+    NEXT_STAGE: staging
+
+lessonsapi:
+  enabled: true
+  ingress:
+    enabled: true
+    hostname: lessons-api.staging.b1stack.example.com

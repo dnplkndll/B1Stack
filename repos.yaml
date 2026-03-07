@@ -1,0 +1,56 @@
+# B1Stack service repos — managed by git-aggregator
+# Run: gitaggregate -c repos.yaml -j 5
+#
+# Each entry declares remotes and an ordered list of merges.
+# git-aggregator clones the repo, sets up remotes, then builds
+# a consolidated branch by merging each ref in order.
+#
+# To add a patch branch:
+#   merges:
+#     - upstream main
+#     - origin feat/my-feature
+#
+# To cherry-pick an upstream PR:
+#   merges:
+#     - upstream main
+#     - upstream refs/pull/42/head
+
+./services/Api:
+  remotes:
+    upstream: https://github.com/ChurchApps/Api.git
+    origin: https://github.com/dnplkndll/Api.git
+  target: origin main
+  merges:
+    - upstream main
+
+./services/B1Admin:
+  remotes:
+    upstream: https://github.com/ChurchApps/B1Admin.git
+    origin: https://github.com/dnplkndll/B1Admin.git
+  target: origin main
+  merges:
+    - upstream main
+    - origin feat/playwright-e2e-tests
+
+./services/B1App:
+  remotes:
+    upstream: https://github.com/ChurchApps/B1App.git
+    origin: https://github.com/dnplkndll/B1App.git
+  target: origin main
+  merges:
+    - upstream main
+    - origin feat/playwright-e2e-tests
+
+./services/LessonsApi:
+  remotes:
+    upstream: https://github.com/ChurchApps/LessonsApi.git
+  target: upstream main
+  merges:
+    - upstream main
+
+./services/AskApi:
+  remotes:
+    upstream: https://github.com/ChurchApps/AskApi.git
+  target: upstream main
+  merges:
+    - upstream main

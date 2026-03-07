@@ -1,0 +1,44 @@
+# B1-Test environment overrides for hz.ledoweb.com
+#
+# Deploy:
+#   helm upgrade --install b1stack helm/b1stack \
+#     --kube-context hetzner-ledo --namespace b1-test --create-namespace \
+#     -f helm/b1stack/values.yaml -f helm/b1stack/values.b1-test.yaml \
+#     --wait --timeout 10m
+#
+# All hostnames, TLS, and cert-manager annotations are derived from global.baseDomain.
+# Secrets are auto-generated on first install and stable across upgrades.
+
+global:
+  baseDomain: b1-test.hz.ledoweb.com
+  ingress:
+    clusterIssuer: letsencrypt-staging
+
+mysql:
+  persistence:
+    storageClass: hcloud-volumes
+    size: 10Gi
+
+api:
+  ingress:
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  env:
+    ENVIRONMENT: dev
+    SERVER_PORT: "8084"
+    SOCKET_PORT: "8087"
+    SOCKET_URL: "ws://b1stack-api:8087"
+    CORS_ORIGIN: "*"
+    FILE_STORE: disk
+    DELIVERY_PROVIDER: local
+
+b1app:
+  env:
+    NEXT_STAGE: staging  # uses external *.staging.churchapps.org APIs
+
+lessonsapi:
+  enabled: false
+
+askapi:
+  enabled: false

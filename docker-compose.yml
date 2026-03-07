@@ -1,0 +1,219 @@
+services:
+  # ─── Database ──────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-b1stack_root}
+      MYSQL_USER: ${MYSQL_USER:-b1stack}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-b1stack_pass}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-b1stack_root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ─── Mailpit (local email catcher) ──────────────────────────────────────────
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "${MAILPIT_UI_PORT:-8025}:8025"   # Web UI
+      - "${MAILPIT_SMTP_PORT:-1025}:25"  # SMTP (host → container 25)
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+      # Bind SMTP to port 25 inside the container so nodemailer's default port works.
+      # Mapped to host port 1025 to avoid needing root on the host.
+      MP_SMTP_BIND_ADDR: "0.0.0.0:25"
+
+  # ─── ChurchApps API ────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8084:8084"
+      - "8087:8087"
+    volumes:
+      - ./services/Api/src:/app/src:cached
+      - api_node_modules:/app/node_modules
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8084/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    environment:
+      ENVIRONMENT: dev
+      SERVER_PORT: 8084
+      # Database connections — use root for full DDL access during initdb
+      MEMBERSHIP_CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/membership
+      ATTENDANCE_CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/attendance
+      CONTENT_CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/content
+      GIVING_CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/giving
+      MESSAGING_CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/messaging
+      DOING_CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/doing
+      REPORTING_CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/reporting
+      # WebSocket
+      SOCKET_PORT: 8087
+      SOCKET_URL: ws://localhost:8087
+      # Misc
+      CORS_ORIGIN: "*"
+      FILE_STORE: disk
+      DELIVERY_PROVIDER: local
+      # Secrets from .env
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      # Optional third-party keys
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+      PEXELS_KEY: ${PEXELS_KEY:-}
+      VIMEO_TOKEN: ${VIMEO_TOKEN:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GOOGLE_RECAPTCHA_SECRET_KEY: ${GOOGLE_RECAPTCHA_SECRET_KEY:-}
+      # Email — routed to mailpit for local email catching
+      # MAIL_SYSTEM=SMTP activates nodemailer SMTP transport in @churchapps/apihelper
+      MAIL_SYSTEM: SMTP
+      SMTP_HOST: mailpit
+      SMTP_SECURE: "false"
+
+  # ─── B1Admin (church staff dashboard) ─────────────────────────────────────
+  b1admin:
+    build:
+      context: .
+      dockerfile: docker/b1admin/Dockerfile.dev
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3101:3101"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3101/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ./services/B1Admin/src:/app/src:cached
+      - ./services/B1Admin/public:/app/public:cached
+      - b1admin_node_modules:/app/node_modules
+    environment:
+      # PORT tells Vite dev server to bind to 3101 (not default 5173)
+      PORT: 3101
+      # REACT_APP_* vars are read at Vite dev-server start.
+      # Restart the container (not just the page) to pick up env changes.
+      REACT_APP_STAGE: dev
+      # API endpoints — browser-facing, so must use localhost (not the docker service name)
+      REACT_APP_ATTENDANCE_API: http://localhost:8084/attendance
+      REACT_APP_GIVING_API: http://localhost:8084/giving
+      REACT_APP_MEMBERSHIP_API: http://localhost:8084/membership
+      REACT_APP_REPORTING_API: http://localhost:8084/reporting
+      REACT_APP_MESSAGING_API: http://localhost:8084/messaging
+      REACT_APP_MESSAGING_API_SOCKET: ws://localhost:8087
+      REACT_APP_CONTENT_API: http://localhost:8084/content
+      REACT_APP_DOING_API: http://localhost:8084/doing
+      REACT_APP_LESSONS_API: http://localhost:8090
+      REACT_APP_CONTENT_ROOT: http://localhost:8084/content
+      REACT_APP_B1_ROOT: http://localhost:3301
+      REACT_APP_B1ADMIN_ROOT: http://localhost:3101
+      # Hot-reload polling for macOS Docker Desktop (inotify not available over bind mounts)
+      CHOKIDAR_USEPOLLING: "true"
+
+  # ─── B1App (public church website / member portal) ─────────────────────────
+  b1app:
+    build:
+      context: .
+      dockerfile: docker/b1app/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3301:3301"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3301/"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ./services/B1App/src:/app/src:cached
+      - ./services/B1App/public:/app/public:cached
+      - b1app_node_modules:/app/node_modules
+    environment:
+      # NEXT_PUBLIC_* vars are inlined at build time in Next.js.
+      # Dev server re-reads them on restart.
+      NEXT_PUBLIC_MEMBERSHIP_API: http://localhost:8084/membership
+      NEXT_PUBLIC_ATTENDANCE_API: http://localhost:8084/attendance
+      NEXT_PUBLIC_GIVING_API: http://localhost:8084/giving
+      NEXT_PUBLIC_MESSAGING_API: http://localhost:8084/messaging
+      NEXT_PUBLIC_CONTENT_API: http://localhost:8084/content
+      NEXT_PUBLIC_CONTENT_ROOT: http://localhost:8084/content
+      NEXT_PUBLIC_LESSONS_API: http://localhost:8090
+      NEXT_PUBLIC_B1_API: http://localhost:8084
+      NEXT_PUBLIC_CHURCH_APPS_URL: http://localhost:3101
+      NEXT_STAGE: dev
+      NEXT_PUBLIC_YOUVERSION_API_KEY: ${NEXT_PUBLIC_YOUVERSION_API_KEY:-}
+      # Hot-reload polling for macOS Docker Desktop
+      WATCHPACK_POLLING: "true"
+
+  # ─── LessonsApi (optional) ─────────────────────────────────────────────────
+  lessonsapi:
+    build:
+      context: .
+      dockerfile: docker/lessonsapi/Dockerfile
+    profiles:
+      - full
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./services/LessonsApi/src:/app/src:cached
+      - lessonsapi_node_modules:/app/node_modules
+    environment:
+      APP_ENV: dev
+      CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/lessons
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      VIMEO_TOKEN: ${VIMEO_TOKEN:-}
+
+  # ─── AskApi (optional) ─────────────────────────────────────────────────────
+  askapi:
+    build:
+      context: .
+      dockerfile: docker/askapi/Dockerfile
+    profiles:
+      - full
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8097:8097"
+    volumes:
+      - ./services/AskApi/src:/app/src:cached
+      - askapi_node_modules:/app/node_modules
+    environment:
+      APP_ENV: dev
+      CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/askapi
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+
+volumes:
+  mysql_data:
+  api_node_modules:
+  b1admin_node_modules:
+  b1app_node_modules:
+  lessonsapi_node_modules:
+  askapi_node_modules:

@@ -1,0 +1,129 @@
+name: Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install git-aggregator
+        run: pip install git-aggregator
+
+      - name: Aggregate service repos
+        run: |
+          git config --global user.email "ci@b1stack.dev"
+          git config --global user.name "B1Stack CI"
+          gitaggregate -c repos.yaml -j 5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Create .env
+        run: |
+          printf '%s\n' \
+            'MYSQL_ROOT_PASSWORD=b1stack_root' \
+            'MYSQL_USER=b1stack' \
+            'MYSQL_PASSWORD=b1stack_pass' \
+            'ENCRYPTION_KEY=ci__test__24__chars!!!!!' \
+            'JWT_SECRET=ci-test-jwt-secret-value' \
+            > .env
+
+      - name: Start services
+        run: docker compose up -d
+
+      - name: Wait for services
+        run: ./scripts/wait-ready.sh
+        env:
+          WAIT_TIMEOUT: 180
+
+      - name: Initialize database
+        run: docker compose exec -T api npm run initdb
+
+      - name: Load demo data
+        run: docker compose exec -T api npx tsx tools/initdb.ts --demo-only
+
+      - name: Verify API auth endpoint
+        run: |
+          echo "--- Testing API login endpoint ---"
+          RESP=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST http://localhost:8084/membership/users/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"demo@b1.church","password":"password"}')
+          STATUS=$(echo "$RESP" | grep "HTTP_STATUS:" | cut -d: -f2)
+          BODY=$(echo "$RESP" | grep -v "HTTP_STATUS:")
+          echo "Status: $STATUS"
+          echo "Body: $BODY"
+          if [ "$STATUS" != "200" ]; then
+            echo "ERROR: API auth failed with status $STATUS"
+            exit 1
+          fi
+          echo "✅ API auth endpoint works"
+
+      # API unit tests skipped — upstream test-setup.ts mocks firebase-admin
+      # which isn't installed. Re-enable when ChurchApps/Api adds it as a devDep.
+
+      - name: Install B1Admin dependencies
+        working-directory: services/B1Admin
+        run: npm install
+
+      - name: Install B1App dependencies
+        working-directory: services/B1App
+        run: npm install
+
+      - name: Install Playwright browsers (B1Admin)
+        working-directory: services/B1Admin
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright browsers (B1App)
+        working-directory: services/B1App
+        run: npx playwright install --with-deps chromium
+
+      - name: Run B1Admin E2E tests
+        working-directory: services/B1Admin
+        run: npx playwright test
+        env:
+          BASE_URL: http://localhost:3101
+          CI: true
+
+      - name: Run B1App E2E tests
+        working-directory: services/B1App
+        run: npx playwright test
+        env:
+          BASE_URL: http://localhost:3301
+          CI: true
+
+      - name: Upload Playwright report (B1Admin)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-b1admin
+          path: services/B1Admin/playwright-report/
+          retention-days: 14
+
+      - name: Upload Playwright report (B1App)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-b1app
+          path: services/B1App/playwright-report/
+          retention-days: 14
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --tail=100

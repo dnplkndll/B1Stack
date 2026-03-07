@@ -1,0 +1,318 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    # Rebuild images every 6 hours — picks up upstream ChurchApps changes automatically.
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+# Prevent concurrent builds on the same ref; cancel any in-progress run.
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/dnplkndll/b1stack
+
+jobs:
+  build-api:
+    name: Build API
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Aggregate service repos
+        run: |
+          pip install git-aggregator
+          git config --global user.email "ci@b1stack.dev"
+          git config --global user.name "B1Stack CI"
+          git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
+          gitaggregate -c repos.yaml -d ./services/Api
+
+      - name: Compute tags
+        id: meta
+        run: |
+          DATE=$(date -u +%Y%m%d)
+          SHA=${GITHUB_SHA::7}
+          echo "date_tag=${DATE}" >> $GITHUB_OUTPUT
+          echo "sha_tag=${SHA}" >> $GITHUB_OUTPUT
+          echo "Tags: ${DATE}, ${SHA}, latest"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push API
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/api/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/api:latest
+            ${{ env.IMAGE_PREFIX }}/api:${{ steps.meta.outputs.sha_tag }}
+            ${{ env.IMAGE_PREFIX }}/api:${{ steps.meta.outputs.date_tag }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+  build-b1admin:
+    name: Build B1Admin
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Aggregate service repos
+        run: |
+          pip install git-aggregator
+          git config --global user.email "ci@b1stack.dev"
+          git config --global user.name "B1Stack CI"
+          git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
+          gitaggregate -c repos.yaml -d ./services/B1Admin
+
+      - name: Compute tags
+        id: meta
+        run: |
+          DATE=$(date -u +%Y%m%d)
+          SHA=${GITHUB_SHA::7}
+          echo "date_tag=${DATE}" >> $GITHUB_OUTPUT
+          echo "sha_tag=${SHA}" >> $GITHUB_OUTPUT
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push B1Admin
+        # NOTE: B1Admin REACT_APP_* vars are baked into the JS bundle at build time (Vite define).
+        # These images are therefore environment-specific (b1-test URLs).
+        # For a different environment, rebuild with different REACT_APP_* build-args.
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/b1admin/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/b1admin:latest
+            ${{ env.IMAGE_PREFIX }}/b1admin:${{ steps.meta.outputs.sha_tag }}
+            ${{ env.IMAGE_PREFIX }}/b1admin:${{ steps.meta.outputs.date_tag }}
+          cache-from: type=gha,scope=b1admin
+          cache-to: type=gha,mode=max,scope=b1admin
+          build-args: |
+            REACT_APP_STAGE=staging
+            REACT_APP_MEMBERSHIP_API=https://api-b1-test.hz.ledoweb.com/membership
+            REACT_APP_ATTENDANCE_API=https://api-b1-test.hz.ledoweb.com/attendance
+            REACT_APP_GIVING_API=https://api-b1-test.hz.ledoweb.com/giving
+            REACT_APP_REPORTING_API=https://api-b1-test.hz.ledoweb.com/reporting
+            REACT_APP_MESSAGING_API=https://api-b1-test.hz.ledoweb.com/messaging
+            REACT_APP_MESSAGING_API_SOCKET=wss://api-b1-test.hz.ledoweb.com
+            REACT_APP_CONTENT_API=https://api-b1-test.hz.ledoweb.com/content
+            REACT_APP_DOING_API=https://api-b1-test.hz.ledoweb.com/doing
+            REACT_APP_LESSONS_API=https://api-b1-test.hz.ledoweb.com/lessons
+            REACT_APP_CONTENT_ROOT=https://b1-test.hz.ledoweb.com
+            REACT_APP_B1_ROOT=https://b1-test.hz.ledoweb.com
+            REACT_APP_B1ADMIN_ROOT=https://admin-b1-test.hz.ledoweb.com
+
+  build-b1app:
+    name: Build B1App
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Aggregate service repos
+        run: |
+          pip install git-aggregator
+          git config --global user.email "ci@b1stack.dev"
+          git config --global user.name "B1Stack CI"
+          git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
+          gitaggregate -c repos.yaml -d ./services/B1App
+
+      - name: Compute tags
+        id: meta
+        run: |
+          DATE=$(date -u +%Y%m%d)
+          SHA=${GITHUB_SHA::7}
+          echo "date_tag=${DATE}" >> $GITHUB_OUTPUT
+          echo "sha_tag=${SHA}" >> $GITHUB_OUTPUT
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push B1App
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/b1app/Dockerfile.prod
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/b1app:latest
+            ${{ env.IMAGE_PREFIX }}/b1app:${{ steps.meta.outputs.sha_tag }}
+            ${{ env.IMAGE_PREFIX }}/b1app:${{ steps.meta.outputs.date_tag }}
+          cache-from: type=gha,scope=b1app
+          cache-to: type=gha,mode=max,scope=b1app
+          build-args: |
+            NEXT_STAGE=staging
+
+  publish-helm:
+    name: Publish Helm Chart
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.14.0'
+
+      - name: Compute version
+        id: meta
+        run: |
+          DATE=$(date -u +%Y%m%d)
+          echo "chart_version=0.${DATE}.0" >> $GITHUB_OUTPUT
+          echo "app_version=${DATE}" >> $GITHUB_OUTPUT
+
+      - name: Log in to GHCR
+        run: |
+          echo "${{ github.token }}" | helm registry login ghcr.io \
+            --username ${{ github.actor }} --password-stdin
+
+      - name: Package and push chart
+        run: |
+          helm package helm/b1stack \
+            --version "${{ steps.meta.outputs.chart_version }}" \
+            --app-version "${{ steps.meta.outputs.app_version }}"
+          helm push b1stack-${{ steps.meta.outputs.chart_version }}.tgz \
+            oci://ghcr.io/dnplkndll/b1stack/charts
+
+  release:
+    name: Create GitHub Release
+    needs: [build-api, build-b1admin, build-b1app]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Aggregate service repos
+        run: |
+          pip install git-aggregator
+          git config --global user.email "ci@b1stack.dev"
+          git config --global user.name "B1Stack CI"
+          git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
+          gitaggregate -c repos.yaml -j 5
+
+      - name: Compute release tag
+        id: tag
+        run: |
+          DATE=$(date -u +%Y%m%d)
+          SHA=${GITHUB_SHA::7}
+          echo "date_tag=${DATE}" >> $GITHUB_OUTPUT
+          echo "sha_tag=${SHA}" >> $GITHUB_OUTPUT
+
+          # Collect service SHAs for release notes
+          API_SHA=$(git -C services/Api rev-parse --short HEAD 2>/dev/null || echo "n/a")
+          B1ADMIN_SHA=$(git -C services/B1Admin rev-parse --short HEAD 2>/dev/null || echo "n/a")
+          B1APP_SHA=$(git -C services/B1App rev-parse --short HEAD 2>/dev/null || echo "n/a")
+          echo "api_sha=${API_SHA}" >> $GITHUB_OUTPUT
+          echo "b1admin_sha=${B1ADMIN_SHA}" >> $GITHUB_OUTPUT
+          echo "b1app_sha=${B1APP_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.date_tag }}
+          name: ${{ steps.tag.outputs.date_tag }}
+          make_latest: true
+          body: |
+            ## Docker images
+
+            ```
+            ghcr.io/dnplkndll/b1stack/api:${{ steps.tag.outputs.date_tag }}
+            ghcr.io/dnplkndll/b1stack/b1admin:${{ steps.tag.outputs.date_tag }}
+            ghcr.io/dnplkndll/b1stack/b1app:${{ steps.tag.outputs.date_tag }}
+            ```
+
+            Also tagged `:${{ steps.tag.outputs.sha_tag }}` and `:latest`.
+
+            > **Note:** B1Admin images have b1-test API URLs baked in at build time.
+            > To deploy to a different environment, rebuild with the appropriate `REACT_APP_*` build-args.
+
+            ## Service commits
+
+            | Service | Commit |
+            |---------|--------|
+            | [ChurchApps/Api](https://github.com/ChurchApps/Api) | `${{ steps.tag.outputs.api_sha }}` |
+            | [ChurchApps/B1Admin](https://github.com/ChurchApps/B1Admin) | `${{ steps.tag.outputs.b1admin_sha }}` |
+            | [ChurchApps/B1App](https://github.com/ChurchApps/B1App) | `${{ steps.tag.outputs.b1app_sha }}` |
+
+            ## Helm deploy
+
+            Install from OCI (no checkout required):
+            ```bash
+            helm upgrade --install b1stack \
+              oci://ghcr.io/dnplkndll/b1stack/charts/b1stack \
+              --version 0.${{ steps.tag.outputs.date_tag }}.0 \
+              -n b1stack --create-namespace \
+              --set mysql.auth.rootPassword=<ROOT_PW> \
+              --set mysql.auth.password=<APP_PW> \
+              --set api.secrets.ENCRYPTION_KEY=<KEY> \
+              --set api.secrets.JWT_SECRET=<SECRET> \
+              --set global.baseDomain=yourdomain.com
+            ```

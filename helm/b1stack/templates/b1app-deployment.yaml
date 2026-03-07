@@ -1,0 +1,75 @@
+{{- if .Values.b1app.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-b1app
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-b1app
+spec:
+  {{- if not .Values.b1app.autoscaling.enabled }}
+  replicas: {{ .Values.b1app.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-b1app
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-b1app
+      {{- with .Values.b1app.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if or .Values.b1app.imagePullSecrets .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+        {{- end }}
+        {{- range .Values.b1app.imagePullSecrets }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.b1app.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.b1app.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.b1app.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: b1app
+          image: "{{ .Values.b1app.image.repository }}:{{ .Values.b1app.image.tag }}"
+          imagePullPolicy: {{ .Values.b1app.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.b1app.service.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-b1app-config
+            {{- if .Values.b1app.secrets }}
+            - secretRef:
+                name: {{ .Release.Name }}-b1app-secrets
+            {{- end }}
+          resources:
+            {{- toYaml .Values.b1app.resources | nindent 12 }}
+          # TCP probe: Next.js SSR on "/" can take >1s to respond (triggers metadata
+          # warnings, data fetches, etc.) causing httpGet probes to time out.
+          # TCP check verifies the port is bound and accepting connections — sufficient
+          # for liveness/readiness without triggering a full page render.
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.b1app.service.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.b1app.service.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+{{- end }}

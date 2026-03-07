@@ -1,0 +1,46 @@
+FROM node:22-alpine AS builder
+WORKDIR /app
+COPY services/B1Admin/package.json services/B1Admin/package-lock.json ./
+# npm install instead of npm ci — upstream lock file may lag behind package.json
+# in submodule; install regenerates it in-place without failing the build.
+RUN npm install && npm run postinstall
+COPY services/B1Admin/vite.config.ts services/B1Admin/tsconfig.json \
+     services/B1Admin/tsconfig.app.json services/B1Admin/tsconfig.node.json \
+     services/B1Admin/index.html services/B1Admin/eslint.config.js ./
+COPY services/B1Admin/src/ ./src/
+COPY services/B1Admin/public/ ./public/
+
+# All REACT_APP_* vars are baked into the JS bundle at Vite build time.
+ARG REACT_APP_STAGE=staging
+ARG REACT_APP_MEMBERSHIP_API
+ARG REACT_APP_ATTENDANCE_API
+ARG REACT_APP_GIVING_API
+ARG REACT_APP_REPORTING_API
+ARG REACT_APP_MESSAGING_API
+ARG REACT_APP_MESSAGING_API_SOCKET
+ARG REACT_APP_CONTENT_API
+ARG REACT_APP_DOING_API
+ARG REACT_APP_LESSONS_API
+ARG REACT_APP_CONTENT_ROOT
+ARG REACT_APP_B1_ROOT
+ARG REACT_APP_B1ADMIN_ROOT
+ENV REACT_APP_STAGE=$REACT_APP_STAGE \
+    REACT_APP_MEMBERSHIP_API=$REACT_APP_MEMBERSHIP_API \
+    REACT_APP_ATTENDANCE_API=$REACT_APP_ATTENDANCE_API \
+    REACT_APP_GIVING_API=$REACT_APP_GIVING_API \
+    REACT_APP_REPORTING_API=$REACT_APP_REPORTING_API \
+    REACT_APP_MESSAGING_API=$REACT_APP_MESSAGING_API \
+    REACT_APP_MESSAGING_API_SOCKET=$REACT_APP_MESSAGING_API_SOCKET \
+    REACT_APP_CONTENT_API=$REACT_APP_CONTENT_API \
+    REACT_APP_DOING_API=$REACT_APP_DOING_API \
+    REACT_APP_LESSONS_API=$REACT_APP_LESSONS_API \
+    REACT_APP_CONTENT_ROOT=$REACT_APP_CONTENT_ROOT \
+    REACT_APP_B1_ROOT=$REACT_APP_B1_ROOT \
+    REACT_APP_B1ADMIN_ROOT=$REACT_APP_B1ADMIN_ROOT
+RUN npm run build
+
+FROM nginx:alpine AS server
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY docker/b1admin/nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

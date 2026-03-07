@@ -1,0 +1,131 @@
+name: Helm CI
+
+on:
+  pull_request:
+    paths:
+      - 'helm/**'
+      - '.github/workflows/helm-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'helm/**'
+
+concurrency:
+  group: helm-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-template:
+    name: Lint and render templates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.14.0'
+
+      - name: Lint (base values only)
+        run: |
+          helm lint helm/b1stack \
+            -f helm/b1stack/values.yaml \
+            --set mysql.auth.rootPassword=test \
+            --set mysql.auth.password=test \
+            --set api.secrets.ENCRYPTION_KEY=changeme \
+            --set api.secrets.JWT_SECRET=changeme
+
+      - name: Lint (b1-test overlay)
+        run: |
+          helm lint helm/b1stack \
+            -f helm/b1stack/values.yaml \
+            -f helm/b1stack/values.b1-test.yaml \
+            --set mysql.auth.rootPassword=test \
+            --set mysql.auth.password=test \
+            --set api.secrets.ENCRYPTION_KEY=changeme \
+            --set api.secrets.JWT_SECRET=changeme
+
+      - name: Render templates — b1-test (diff target)
+        id: render
+        run: |
+          helm template b1stack helm/b1stack \
+            --namespace b1-test \
+            -f helm/b1stack/values.yaml \
+            -f helm/b1stack/values.b1-test.yaml \
+            --set mysql.auth.rootPassword=test \
+            --set mysql.auth.password=test \
+            --set api.secrets.ENCRYPTION_KEY=changeme \
+            --set api.secrets.JWT_SECRET=changeme \
+            > /tmp/b1stack-rendered-b1test.yaml
+
+          echo "=== Rendered resource summary ==="
+          grep -E "^kind:" /tmp/b1stack-rendered-b1test.yaml | sort | uniq -c | sort -rn
+
+          echo "=== Ingress hostnames ==="
+          grep "host:" /tmp/b1stack-rendered-b1test.yaml || true
+
+          echo "=== IngressClassName values ==="
+          grep "ingressClassName:" /tmp/b1stack-rendered-b1test.yaml || true
+
+          echo "=== Image tags ==="
+          grep "image:" /tmp/b1stack-rendered-b1test.yaml | grep -v imagePull || true
+
+      - name: Upload rendered manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-rendered-b1test
+          path: /tmp/b1stack-rendered-b1test.yaml
+          retention-days: 7
+
+      - name: Render templates — external DB (mysql.enabled=false)
+        run: |
+          helm template b1stack helm/b1stack \
+            --namespace b1-test \
+            -f helm/b1stack/values.yaml \
+            -f helm/b1stack/values.b1-test.yaml \
+            --set mysql.enabled=false \
+            --set api.secrets.ENCRYPTION_KEY=changeme \
+            --set api.secrets.JWT_SECRET=changeme \
+            --set "api.secrets.MEMBERSHIP_CONNECTION_STRING=mysql://user:pass@external-db:3306/membership" \
+            --set "api.secrets.ATTENDANCE_CONNECTION_STRING=mysql://user:pass@external-db:3306/attendance" \
+            --set "api.secrets.CONTENT_CONNECTION_STRING=mysql://user:pass@external-db:3306/content" \
+            --set "api.secrets.GIVING_CONNECTION_STRING=mysql://user:pass@external-db:3306/giving" \
+            --set "api.secrets.MESSAGING_CONNECTION_STRING=mysql://user:pass@external-db:3306/messaging" \
+            --set "api.secrets.DOING_CONNECTION_STRING=mysql://user:pass@external-db:3306/doing" \
+            --set "api.secrets.REPORTING_CONNECTION_STRING=mysql://user:pass@external-db:3306/reporting" \
+            > /tmp/b1stack-rendered-external-db.yaml
+
+          echo "=== External DB render — no MySQL StatefulSet expected ==="
+          grep "StatefulSet" /tmp/b1stack-rendered-external-db.yaml && echo "FAIL: MySQL still rendered" || echo "OK: no MySQL StatefulSet"
+
+      - name: Render templates — existingSecret (no chart-created Secrets expected for api)
+        run: |
+          helm template b1stack helm/b1stack \
+            --namespace b1-test \
+            -f helm/b1stack/values.yaml \
+            -f helm/b1stack/values.b1-test.yaml \
+            --set mysql.auth.rootPassword=test \
+            --set mysql.auth.password=test \
+            --set api.existingSecret=my-api-secret \
+            --set lessonsapi.enabled=true \
+            --set lessonsapi.existingSecret=my-lessons-secret \
+            --set askapi.enabled=true \
+            --set askapi.existingSecret=my-ask-secret \
+            > /tmp/b1stack-rendered-existing-secret.yaml
+
+          echo "=== existingSecret render — no chart-created api/lessonsapi/askapi Secrets expected ==="
+          grep "name: b1stack-api-secrets" /tmp/b1stack-rendered-existing-secret.yaml \
+            && echo "FAIL: chart-created api secret still rendered" \
+            || echo "OK: no chart api secret"
+          grep "name: b1stack-lessonsapi-secrets" /tmp/b1stack-rendered-existing-secret.yaml \
+            && echo "FAIL: chart-created lessonsapi secret still rendered" \
+            || echo "OK: no chart lessonsapi secret"
+          grep "name: b1stack-askapi-secrets" /tmp/b1stack-rendered-existing-secret.yaml \
+            && echo "FAIL: chart-created askapi secret still rendered" \
+            || echo "OK: no chart askapi secret"
+          echo "=== Verify secretRef points to existingSecret names ==="
+          grep "my-api-secret" /tmp/b1stack-rendered-existing-secret.yaml \
+            && echo "OK: api existingSecret referenced" \
+            || echo "FAIL: api existingSecret not found in secretRef"
