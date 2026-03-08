@@ -2,6 +2,10 @@
 
 Docker Compose and Helm orchestration for the [ChurchApps](https://b1.church) B1 product suite — run the full stack locally in minutes.
 
+> **Evaluating B1Stack for your church?**
+> → [Cloud hosting costs & CLI install steps](docs/cloud-hosting.md) — from **~$13/mo** (Hetzner) to ~$121/mo (AWS EKS)
+> → [On-site hardware & implementation plan](docs/implementation-guide.md) — kiosks, printers, AV, project timeline *(WIP — community review welcome)*
+
 ## Quick Start (Docker Compose)
 
 ```bash
