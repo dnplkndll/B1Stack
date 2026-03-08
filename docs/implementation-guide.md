@@ -43,7 +43,7 @@ The Sunday check-in flow in B1Stack is a web app — any device with a browser w
 | Repurposed Windows laptop     | $0–150      | Works; less polished experience at the kiosk               |
 | Raspberry Pi 5 + display      | ~$150–200   | DIY; good for fixed kiosk stations                         |
 
-**Per-station software**: just a browser pointed at `https://b1admin.YOUR_DOMAIN/checkin`.
+**Per-station software**: just a browser pointed at `https://admin-church.YOUR_DOMAIN/checkin`.
 No local install needed. Devices can share a single check-in staff login.
 
 **How many kiosks?**

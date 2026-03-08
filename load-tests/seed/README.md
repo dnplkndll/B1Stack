@@ -6,7 +6,7 @@ SQL seed scripts for realistic load testing datasets.
 
 | Script               | Members | Services | Groups | Events | Target test  |
 |----------------------|---------|----------|--------|--------|--------------|
-| `small-church.sql`   | 500     | 3/wk     | 15     | 10/wk  | 10-user test |
+| `small-church.sql`   | 500     | 3/wk     | ~12    | 10/wk  | 10-user test |
 | `large-church.sql`   | 5,000   | 3/wk     | 80     | 30/wk  | 50-user test |
 
 ## Loading seed data

@@ -45,9 +45,18 @@ export function setup() {
   const tokens = login();
   if (!tokens) throw new Error('Login failed in setup');
 
-  // Get a current session ID from the DB (Sunday morning session)
-  // In production this would be created by staff before service
-  return { tokens, sessionId: 'SES00000028' };
+  // Dynamically fetch a valid session ID from the attendance DB
+  const sessRes = staffAttendanceReport(tokens);
+  let sessionId = null;
+  try {
+    const sessions = JSON.parse(sessRes.body);
+    if (Array.isArray(sessions) && sessions.length > 0) {
+      sessionId = sessions[0].id;
+    }
+  } catch (_) { /* ignored */ }
+  if (!sessionId) throw new Error('No sessions found — create a session in B1Admin before running checkin test');
+
+  return { tokens, sessionId };
 }
 
 export default function ({ tokens, sessionId }) {

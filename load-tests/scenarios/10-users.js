@@ -8,7 +8,7 @@
  *   15% — members using B1App portal (self-service profile, groups, giving)
  *
  * Validates the default chart sizing:
- *   mysql.maxConnections=50, api.replicaCount=1, DB_CONNECTION_LIMIT=10
+ *   mysql.maxConnections=100, api.replicaCount=1
  *
  * Run:
  *   k6 run --env BASE_URL=http://localhost:8084 load-tests/scenarios/10-users.js

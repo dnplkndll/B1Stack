@@ -118,8 +118,8 @@ For sustained large-scale testing (500+ VUs, 5k-member church scenario):
 # Install k6 operator on the test cluster
 kubectl apply -f https://raw.githubusercontent.com/grafana/k6-operator/main/bundle.yaml
 
-# Run a distributed k6 job with 10 parallelism × 15 VUs each = 150 VUs
-kubectl apply -f load-tests/k6-distributed-job.yaml  # TODO: create this
+# Run a distributed k6 job — see k6-operator docs for TestRun CRD syntax:
+# https://grafana.com/docs/k6/latest/set-up/set-up-distributed-k6/
 ```
 
 ---

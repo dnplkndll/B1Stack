@@ -7,10 +7,8 @@
 -- This script EXTENDS the existing 86 people with more realistic data.
 --
 -- Run:
---   docker exec church-mysql-1 sh -c \
---     "mysql -uroot -pb1stack_root membership" < load-tests/seed/small-church.sql
---   docker exec church-mysql-1 sh -c \
---     "mysql -uroot -pb1stack_root attendance" < load-tests/seed/small-church-attendance.sql
+--   docker compose exec -T mysql mysql -uroot -pb1stack-root-dev membership \
+--     < load-tests/seed/small-church.sql
 -- ============================================================
 
 USE membership;
@@ -92,7 +90,7 @@ BEGIN
     VALUES (
       LPAD(CONCAT('GM', i), 11, '0'),
       'CHU00000001',
-      ELT(1 + (i % 15), 'GRP00000001','GRP00000004','GRP00000010','GRP00000011','GRP00000012','GRP00000013','GRP00000015','GRP00000016','GRP00000017','GRP00000019','GRP00000020','GRP00000021','GRP00000022','GRP00000023','GRP0000000b'),
+      ELT(1 + (i % 12), 'GRP00000001','GRP00000004','GRP00000010','GRP00000011','GRP00000012','GRP00000013','GRP00000015','GRP00000017','GRP00000018','GRP00000020','GRP00000021','GRP00000022'),
       LPAD(CONCAT('PER', i), 11, '0'),
       IF(i % 25 = 0, 1, 0)
     );

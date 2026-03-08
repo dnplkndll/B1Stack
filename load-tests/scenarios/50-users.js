@@ -2,9 +2,8 @@
  * Stress test — ramp to 50 concurrent users, 10 minutes.
  *
  * Requires chart upscaling before running:
- *   --set mysql.maxConnections=100
+ *   --set mysql.maxConnections=200
  *   --set api.replicaCount=2
- *   --set api.env.DB_CONNECTION_LIMIT=15
  *
  * Traffic mix shifts toward writes and heavier reads at scale:
  *   30% — anon public visitors (SSR triggers, church lookup)
@@ -41,17 +40,26 @@ export const options = {
   },
 };
 
-const SHARED_SESSION_ID = 'SES00000028';   // known session from demo data
-
 export function setup() {
   smokeCheck();
   const tokens = login();
   if (!tokens) throw new Error('Login failed');
 
-  return tokens;
+  // Dynamically fetch a valid session ID from the DB instead of hardcoding
+  const sessRes = staffAttendanceReport(tokens);
+  let sessionId = null;
+  try {
+    const sessions = JSON.parse(sessRes.body);
+    if (Array.isArray(sessions) && sessions.length > 0) {
+      sessionId = sessions[0].id;
+    }
+  } catch (_) { /* ignored */ }
+  if (!sessionId) console.warn('No sessions found — checkin visits will likely fail');
+
+  return { ...tokens, sessionId };
 }
 
-export default function (tokens) {
+export default function ({ sessionId, ...tokens }) {
   const roll = Math.random();
 
   if (roll < 0.30) {
@@ -83,7 +91,7 @@ export default function (tokens) {
       staffPersonUpdate(tokens, pickRandom(PERSON_IDS));
     } else {
       // Attendance checkin (second most common write on Sundays)
-      checkinVisit(tokens, pickRandom(PERSON_IDS), SHARED_SESSION_ID);
+      checkinVisit(tokens, pickRandom(PERSON_IDS), sessionId);
     }
     sleep(randomBetween(1, 2));
 
