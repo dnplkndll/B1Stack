@@ -22,6 +22,8 @@
   target: origin main
   merges:
     - upstream main
+    - origin fix/missing-initdb-tables
+    - origin fix/demo-role-permissions
 
 ./services/B1Admin:
   remotes:

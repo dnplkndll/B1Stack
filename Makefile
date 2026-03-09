@@ -1,5 +1,5 @@
-.PHONY: up up-full down logs init reset health test test-e2e demo-data \
-       shell-api shell-db wait setup aggregate mail help
+.PHONY: up up-full down logs init reset health test test-e2e test-ci demo-data \
+       shell-api shell-db wait setup aggregate mail clean-test help
 
 COMPOSE := docker compose
 COMPOSE_FULL := docker compose --profile full
@@ -49,6 +49,17 @@ test: ## Run Playwright E2E tests against localhost
 test-e2e: ## Run Playwright E2E tests (B1Admin + B1App)
 	cd services/B1Admin && BASE_URL=http://localhost:3101 npx playwright test
 	cd services/B1App && BASE_URL=http://localhost:3301 npx playwright test
+
+test-ci: ## Clean env + run E2E tests (mirrors CI: fresh DB, demo data, workers=2)
+	$(MAKE) clean-test
+	$(MAKE) up
+	$(MAKE) init
+	$(MAKE) demo-data
+	cd services/B1Admin && CI=true BASE_URL=http://localhost:3101 npx playwright test --workers=2
+	cd services/B1App && CI=true BASE_URL=http://localhost:3301 npx playwright test --workers=2
+
+clean-test: ## Tear down everything (containers, volumes, images) for a clean slate
+	$(COMPOSE_FULL) down -v
 
 ##@ Shell Access
 shell-api: ## Open a shell in the API container
