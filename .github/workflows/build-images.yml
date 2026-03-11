@@ -116,9 +116,9 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push B1Admin
-        # NOTE: B1Admin REACT_APP_* vars are baked into the JS bundle at build time (Vite define).
-        # These images are therefore environment-specific (b1-test URLs).
-        # For a different environment, rebuild with different REACT_APP_* build-args.
+        # B1Admin now uses sentinel placeholders (__B1_*__) baked at build time.
+        # The entrypoint script replaces them with REACT_APP_* env vars at container start.
+        # A single image works for any environment — no rebuild needed.
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -130,20 +130,6 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/b1admin:${{ steps.meta.outputs.date_tag }}
           cache-from: type=gha,scope=b1admin
           cache-to: type=gha,mode=max,scope=b1admin
-          build-args: |
-            REACT_APP_STAGE=staging
-            REACT_APP_MEMBERSHIP_API=https://api-b1-test.hz.ledoweb.com/membership
-            REACT_APP_ATTENDANCE_API=https://api-b1-test.hz.ledoweb.com/attendance
-            REACT_APP_GIVING_API=https://api-b1-test.hz.ledoweb.com/giving
-            REACT_APP_REPORTING_API=https://api-b1-test.hz.ledoweb.com/reporting
-            REACT_APP_MESSAGING_API=https://api-b1-test.hz.ledoweb.com/messaging
-            REACT_APP_MESSAGING_API_SOCKET=wss://api-b1-test.hz.ledoweb.com
-            REACT_APP_CONTENT_API=https://api-b1-test.hz.ledoweb.com/content
-            REACT_APP_DOING_API=https://api-b1-test.hz.ledoweb.com/doing
-            REACT_APP_LESSONS_API=https://api-b1-test.hz.ledoweb.com/lessons
-            REACT_APP_CONTENT_ROOT=https://b1-test.hz.ledoweb.com
-            REACT_APP_B1_ROOT=https://b1-test.hz.ledoweb.com
-            REACT_APP_B1ADMIN_ROOT=https://admin-b1-test.hz.ledoweb.com
 
   build-b1app:
     name: Build B1App
@@ -187,6 +173,8 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push B1App
+        # B1App now uses sentinel placeholders (__B1_*__) baked at build time.
+        # The entrypoint script replaces them with NEXT_PUBLIC_* env vars at container start.
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -198,8 +186,6 @@ jobs:
             ${{ env.IMAGE_PREFIX }}/b1app:${{ steps.meta.outputs.date_tag }}
           cache-from: type=gha,scope=b1app
           cache-to: type=gha,mode=max,scope=b1app
-          build-args: |
-            NEXT_STAGE=staging
 
   publish-helm:
     name: Publish Helm Chart
@@ -291,8 +277,8 @@ jobs:
 
             Also tagged `:${{ steps.tag.outputs.sha_tag }}` and `:latest`.
 
-            > **Note:** B1Admin images have b1-test API URLs baked in at build time.
-            > To deploy to a different environment, rebuild with the appropriate `REACT_APP_*` build-args.
+            > **Note:** B1Admin and B1App images use runtime env injection — a single image
+            > works for any environment. Set `REACT_APP_*` / `NEXT_PUBLIC_*` env vars at deploy time.
 
             ## Service commits
 
