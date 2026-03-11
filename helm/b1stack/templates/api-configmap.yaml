@@ -7,6 +7,7 @@ metadata:
   labels:
     app: {{ .Release.Name }}-api
 data:
+  DB_DIALECT: {{ .Values.dbDialect | quote }}
   {{- range $k, $v := .Values.api.env }}
   {{ $k }}: {{ $v | quote }}
   {{- end }}

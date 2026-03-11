@@ -5,6 +5,9 @@
 # git-aggregator clones the repo, sets up remotes, then builds
 # a consolidated branch by merging each ref in order.
 #
+# `target: aggregated` creates a local-only branch (never pushed).
+# This keeps origin/main as a clean mirror of upstream.
+#
 # To add a patch branch:
 #   merges:
 #     - upstream main
@@ -19,15 +22,19 @@
   remotes:
     upstream: https://github.com/ChurchApps/Api.git
     origin: https://github.com/dnplkndll/Api.git
-  target: origin main
+  target: aggregated
   merges:
     - upstream main
+    - origin fix/missing-initdb-tables
+    - origin fix/demo-role-permissions
+    - origin feat/drizzle-orm
+    - origin feat/dual-dialect
 
 ./services/B1Admin:
   remotes:
     upstream: https://github.com/ChurchApps/B1Admin.git
     origin: https://github.com/dnplkndll/B1Admin.git
-  target: origin main
+  target: aggregated
   merges:
     - upstream main
     - origin feat/playwright-e2e-tests
@@ -36,7 +43,7 @@
   remotes:
     upstream: https://github.com/ChurchApps/B1App.git
     origin: https://github.com/dnplkndll/B1App.git
-  target: origin main
+  target: aggregated
   merges:
     - upstream main
     - origin feat/playwright-e2e-tests
@@ -44,13 +51,13 @@
 ./services/LessonsApi:
   remotes:
     upstream: https://github.com/ChurchApps/LessonsApi.git
-  target: upstream main
+  target: aggregated
   merges:
     - upstream main
 
 ./services/AskApi:
   remotes:
     upstream: https://github.com/ChurchApps/AskApi.git
-  target: upstream main
+  target: aggregated
   merges:
     - upstream main

@@ -1,0 +1,58 @@
+{{- if .Values.cnpg.enabled }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Release.Name }}-pg
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}-pg
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: Helm
+spec:
+  instances: {{ .Values.cnpg.instances }}
+  {{- if .Values.cnpg.image }}
+  imageName: {{ .Values.cnpg.image }}
+  {{- end }}
+
+  postgresql:
+    parameters:
+      {{- range $key, $value := .Values.cnpg.postgresql.parameters }}
+      {{ $key }}: {{ $value | quote }}
+      {{- end }}
+
+  storage:
+    size: {{ .Values.cnpg.storage.size }}
+    {{- if .Values.cnpg.storage.storageClass }}
+    storageClass: {{ .Values.cnpg.storage.storageClass }}
+    {{- end }}
+
+  bootstrap:
+    initdb:
+      database: {{ .Values.cnpg.database }}
+      owner: {{ .Values.cnpg.auth.username }}
+      secret:
+        name: {{ .Release.Name }}-pg-auth
+      postInitSQL:
+        {{- range .Values.cnpg.schemas }}
+        - CREATE SCHEMA IF NOT EXISTS {{ . }};
+        - GRANT ALL PRIVILEGES ON SCHEMA {{ . }} TO {{ $.Values.cnpg.auth.username }};
+        {{- end }}
+        - ALTER DATABASE {{ .Values.cnpg.database }} SET search_path TO public, {{ join ", " .Values.cnpg.schemas }};
+
+  resources:
+    {{- toYaml .Values.cnpg.resources | nindent 4 }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Release.Name }}-pg-auth
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}-pg
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: Helm
+type: kubernetes.io/basic-auth
+stringData:
+  username: {{ .Values.cnpg.auth.username | quote }}
+  password: {{ .Values.cnpg.auth.password | quote }}
+{{- end }}

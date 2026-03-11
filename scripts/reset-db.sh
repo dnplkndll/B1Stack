@@ -12,12 +12,21 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
   exit 1
 fi
 
-echo "→ Running reset-db..."
-docker compose exec api npm run reset-db
+DIALECT="${DB_DIALECT:-mysql}"
 
-echo ""
-echo "→ Re-running initdb..."
-docker compose exec api npm run initdb
+if [[ "$DIALECT" == "postgres" || "$DIALECT" == "postgresql" || "$DIALECT" == "pg" ]]; then
+  echo "→ Running reset-db (PostgreSQL)..."
+  docker compose exec api DB_DIALECT=postgres npm run reset-db
+  echo ""
+  echo "→ Re-running initdb..."
+  docker compose exec api DB_DIALECT=postgres npm run initdb
+else
+  echo "→ Running reset-db (MySQL)..."
+  docker compose exec api npm run reset-db
+  echo ""
+  echo "→ Re-running initdb..."
+  docker compose exec api npm run initdb
+fi
 
 echo ""
 echo "=== Reset complete ==="
