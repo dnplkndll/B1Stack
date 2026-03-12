@@ -67,7 +67,7 @@ mysql:
 cnpg:
   enabled: false
   instances: 2
-  image: ghcr.io/cloudnative-pg/postgresql:17-alpine
+  image: ghcr.io/cloudnative-pg/postgresql:17.6
   database: b1stack
   auth:
     username: b1stack

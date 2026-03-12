@@ -32,7 +32,7 @@ spec:
       owner: {{ .Values.cnpg.auth.username }}
       secret:
         name: {{ .Release.Name }}-pg-auth
-      postInitSQL:
+      postInitApplicationSQL:
         {{- range .Values.cnpg.schemas }}
         - CREATE SCHEMA IF NOT EXISTS {{ . }};
         - GRANT ALL PRIVILEGES ON SCHEMA {{ . }} TO {{ $.Values.cnpg.auth.username }};

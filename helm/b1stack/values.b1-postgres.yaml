@@ -70,6 +70,7 @@ b1admin:
 b1app:
   env:
     NEXT_STAGE: dev
+    NODE_TLS_REJECT_UNAUTHORIZED: "0"
     NEXT_PUBLIC_MEMBERSHIP_API: "https://api-b1-postgres.hz.ledoweb.com/membership"
     NEXT_PUBLIC_ATTENDANCE_API: "https://api-b1-postgres.hz.ledoweb.com/attendance"
     NEXT_PUBLIC_GIVING_API: "https://api-b1-postgres.hz.ledoweb.com/giving"
