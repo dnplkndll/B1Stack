@@ -25,10 +25,7 @@
   target: aggregated
   merges:
     - upstream main
-    - origin fix/missing-initdb-tables
-    - origin fix/demo-role-permissions
     - origin feat/drizzle-orm
-    - origin feat/dual-dialect
 
 ./services/B1Admin:
   remotes:

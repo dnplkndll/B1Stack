@@ -12,7 +12,7 @@ dbDialect: mysql
 global:
   baseDomain: b1-mysql.hz.ledoweb.com
   ingress:
-    clusterIssuer: letsencrypt-staging
+    clusterIssuer: letsencrypt-prod
 
 mysql:
   enabled: true
@@ -62,7 +62,6 @@ b1admin:
 b1app:
   env:
     NEXT_STAGE: dev
-    NODE_TLS_REJECT_UNAUTHORIZED: "0"
     NEXT_PUBLIC_MEMBERSHIP_API: "https://api-b1-mysql.hz.ledoweb.com/membership"
     NEXT_PUBLIC_ATTENDANCE_API: "https://api-b1-mysql.hz.ledoweb.com/attendance"
     NEXT_PUBLIC_GIVING_API: "https://api-b1-mysql.hz.ledoweb.com/giving"
