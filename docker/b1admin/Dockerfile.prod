@@ -3,7 +3,7 @@ WORKDIR /app
 COPY services/B1Admin/package.json services/B1Admin/package-lock.json ./
 # npm install instead of npm ci — upstream lock file may lag behind package.json
 # in submodule; install regenerates it in-place without failing the build.
-RUN npm install && npm run postinstall
+RUN npm install --legacy-peer-deps && npm run postinstall
 COPY services/B1Admin/vite.config.ts services/B1Admin/tsconfig.json \
      services/B1Admin/tsconfig.app.json services/B1Admin/tsconfig.node.json \
      services/B1Admin/index.html services/B1Admin/eslint.config.js ./
