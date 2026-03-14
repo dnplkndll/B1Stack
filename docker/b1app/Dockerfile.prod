@@ -37,7 +37,7 @@ ENV NODE_ENV=production NEXT_STAGE=dev
 COPY services/B1App/package.json services/B1App/package-lock.json ./
 # --ignore-scripts: postinstall calls copyfiles (devDep) to copy locales/CSS into public/.
 # Those files are already present in the .next build copied from builder — skip here.
-RUN npm install --omit=dev --ignore-scripts
+RUN npm install --omit=dev --ignore-scripts --legacy-peer-deps
 COPY services/B1App/next.config.mjs ./
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
