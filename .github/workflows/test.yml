@@ -50,7 +50,7 @@ jobs:
       - name: Wait for services
         run: ./scripts/wait-ready.sh
         env:
-          WAIT_TIMEOUT: 180
+          WAIT_TIMEOUT: 300
 
       - name: Initialize database
         run: docker compose exec -T api npm run initdb
