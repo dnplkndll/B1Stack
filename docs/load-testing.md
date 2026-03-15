@@ -31,7 +31,7 @@ make up
 make init   # first time only
 
 # Load seed data
-docker compose exec -T mysql mysql -uroot -pb1stack-root-dev membership \
+docker compose exec -T mysql mysql -uroot -pb1stack_root membership \
   < load-tests/seed/small-church.sql
 
 # Smoke check first
@@ -41,7 +41,7 @@ k6 run --env BASE_URL=http://localhost:8084 load-tests/scenarios/api-health.js
 k6 run --env BASE_URL=http://localhost:8084 load-tests/scenarios/10-users.js
 
 # Watch MySQL connections in another terminal while the test runs:
-watch -n2 'docker compose exec mysql mysql -uroot -pb1stack-root-dev \
+watch -n2 'docker compose exec mysql mysql -uroot -pb1stack_root \
   -e "SHOW STATUS LIKE '"'"'Threads_connected'"'"'; SHOW STATUS LIKE '"'"'Max_used_connections'"'"';"'
 ```
 
@@ -52,7 +52,7 @@ watch -n2 'docker compose exec mysql mysql -uroot -pb1stack-root-dev \
 make logs | grep -E "error|Error|connection|pool|429|500"
 
 # MySQL connection count peaks
-docker compose exec mysql mysql -uroot -pb1stack-root-dev \
+docker compose exec mysql mysql -uroot -pb1stack_root \
   -e "SHOW STATUS LIKE 'Max_used_connections';"
 
 # Memory usage during test
