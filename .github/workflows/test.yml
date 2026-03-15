@@ -80,7 +80,7 @@ jobs:
 
       - name: Install B1Admin dependencies
         working-directory: services/B1Admin
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Install Playwright browsers (B1Admin)
         working-directory: services/B1Admin
