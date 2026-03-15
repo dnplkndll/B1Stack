@@ -35,8 +35,9 @@ export const options = {
   thresholds: {
     'http_req_duration{type:api}': ['p(95)<1500', 'p(99)<3000'],
     'http_req_duration{type:ssr}': ['p(95)<5000'],
-    'http_req_duration{flow:checkin}': ['p(95)<2000'],   // checkin must stay fast
-    http_req_failed: ['rate<0.01'],
+    'http_req_duration{flow:checkin}': ['p(95)<2000'],
+    'http_req_duration{flow:staff-write}': ['p(95)<2000'],
+    http_req_failed: ['rate<0.005'],
   },
 };
 

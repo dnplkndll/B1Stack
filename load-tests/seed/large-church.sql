@@ -84,7 +84,7 @@ CALL seed_large_people();
 DROP PROCEDURE IF EXISTS seed_large_people;
 
 -- ── Services (3 weekend + midweek + satellite campus) ───────────────────────
-INSERT IGNORE INTO services (id, churchId, name)
+INSERT IGNORE INTO attendance.services (id, churchId, name)
 VALUES
   ('LSVC0000001', 'CHU00000002', 'Saturday Evening'),
   ('LSVC0000002', 'CHU00000002', 'Sunday 8am'),
@@ -119,7 +119,33 @@ DELIMITER ;
 CALL seed_large_groups();
 DROP PROCEDURE IF EXISTS seed_large_groups;
 
+-- ── Group memberships (~2,000 members across 80 groups, avg 25/group) ─────
+DROP PROCEDURE IF EXISTS seed_large_members;
+DELIMITER $$
+CREATE PROCEDURE seed_large_members()
+BEGIN
+  DECLARE i INT DEFAULT 1;
+  DECLARE grp_idx INT;
+  WHILE i <= 2000 DO
+    SET grp_idx = 1 + (i % 80);
+    INSERT IGNORE INTO groupMembers (id, churchId, groupId, personId, leader, joinDate)
+    VALUES (
+      LPAD(CONCAT('LGM', i), 11, '0'),
+      'CHU00000002',
+      LPAD(CONCAT('LGRP', grp_idx), 11, '0'),
+      LPAD(CONCAT('LPER', i), 11, '0'),
+      IF(i % 25 = 0, 1, 0),
+      DATE_SUB(CURDATE(), INTERVAL FLOOR(RAND() * 365) DAY)
+    );
+    SET i = i + 1;
+  END WHILE;
+END$$
+DELIMITER ;
+CALL seed_large_members();
+DROP PROCEDURE IF EXISTS seed_large_members;
+
 SELECT 'Large church seed complete' AS status,
-  (SELECT COUNT(*) FROM people WHERE churchId='CHU00000002')     AS people,
-  (SELECT COUNT(*) FROM households WHERE churchId='CHU00000002') AS households,
-  (SELECT COUNT(*) FROM `groups` WHERE churchId='CHU00000002')   AS grps;
+  (SELECT COUNT(*) FROM people WHERE churchId='CHU00000002')        AS people,
+  (SELECT COUNT(*) FROM households WHERE churchId='CHU00000002')    AS households,
+  (SELECT COUNT(*) FROM `groups` WHERE churchId='CHU00000002')      AS grps,
+  (SELECT COUNT(*) FROM groupMembers WHERE churchId='CHU00000002')  AS members;

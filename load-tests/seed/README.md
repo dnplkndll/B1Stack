@@ -17,14 +17,14 @@ kubectl exec -i -n b1stack statefulset/b1stack-mysql -- \
   mysql -uroot -p$ROOT_PW membership < load-tests/seed/small-church.sql
 
 # Or via docker compose (local dev):
-docker compose exec -T mysql mysql -uroot -pb1stack-root-dev membership \
+docker compose exec -T mysql mysql -uroot -pb1stack_root membership \
   < load-tests/seed/small-church.sql
 ```
 
 ## Data model notes
 
-Seed data covers only the `membership` database (people, households, groups, services, service times).
-The `attendance` database gets populated by the Sunday check-in load test itself.
+Seed data covers `membership` (people, households, groups, groupMembers) and `attendance` (services).
+The `attendance` sessions/visits get populated by the Sunday check-in load test itself.
 
 Schema is verified against the live ChurchApps API initdb migrations. Key columns:
 - `people`: id, churchId, householdId, firstName, lastName, displayName, email, membershipStatus, gender
