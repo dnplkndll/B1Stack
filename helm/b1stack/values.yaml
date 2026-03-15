@@ -20,18 +20,27 @@ mysql:
     password: "b1stack-dev"
 
   # ── Connection capacity sizing ─────────────────────────────────────────────
-  # Rule of thumb: max_connections > (api.replicaCount × connectionPoolSize) + 10
+  # MEASURED: 10-user k6 baseline against 500-member dataset → 39 max connections used.
+  # Source: load-tests/scenarios/10-users.js, 5min run, 500 people, 564 iterations.
   #
-  # Concurrent users  API replicas  Pool/replica  max_connections  RAM overhead
-  # ─────────────────────────────────────────────────────────────────────────
-  #  10  (this default)    1             10              50          ~75 MB
-  #  50                    2             15             100         ~150 MB
-  # 100                    3             20             200         ~300 MB
-  # 500+                   use managed DB (RDS/Cloud SQL) — set mysql.enabled=false
+  # How the pool works: API creates one mysql2 pool per database module (hardcoded limit=10).
+  # With 7 active modules: 7 × 10 = 70 max connections per API replica.
+  # Only active-module pools are opened, so real usage < 70 at low concurrency.
+  #
+  # Sizing rule: max_connections > (api.replicaCount × 70) + 10 (system overhead)
+  #
+  # Concurrent users  API replicas  max_connections  Measured peak  RAM overhead
+  # ────────────────────────────────────────────────────────────────────────────
+  #  10  (this default)    1              100          39 (measured)   ~75 MB
+  #  50                    2              160         ~80 (estimated)  ~150 MB
+  # 100+                   use managed DB (RDS/Cloud SQL) — set mysql.enabled=false
+  #
+  # NOTE: api.env.DB_CONNECTION_LIMIT has no effect — pool size is hardcoded to 10
+  # in services/Api/src/shared/infrastructure/MultiDatabasePool.ts.
+  # To change pool size, a patch to the upstream API is needed.
   #
   # wait_timeout: close idle connections after N seconds (prevents ghost conn leaks).
-  # Tune down to 60 if you see high sleep-count during load tests.
-  maxConnections: 50          # raise to 100 for 50-user target; see table above
+  maxConnections: 100         # raised from 50 after load test measured 39 peak at 10 users
   waitTimeout: 300            # seconds before idle connection closed; default MySQL=28800
   interactiveTimeout: 300     # same for interactive sessions
 
@@ -160,12 +169,10 @@ api:
     CORS_ORIGIN: "*"               # Restrict to your domains in production
     FILE_STORE: disk               # disk (ephemeral pod storage) | S3 (AWS S3 / GCS via S3-compat API)
     DELIVERY_PROVIDER: local       # local | aws
-    # ── Connection pool ─────────────────────────────────────────────────────
-    # mysql2 pool size per API replica. Must satisfy:
-    #   mysql.maxConnections > api.replicaCount × DB_CONNECTION_LIMIT + 10
-    # Default 10 × 1 replica = 10 active conns; max_connections=50 gives 5× headroom.
-    # For 50-user target: set DB_CONNECTION_LIMIT=15, api.replicaCount=2, mysql.maxConnections=100
-    DB_CONNECTION_LIMIT: "10"
+    # NOTE: DB_CONNECTION_LIMIT is defined here for documentation but NOT currently read
+    # by the API — pool size is hardcoded to 10 per module in MultiDatabasePool.ts.
+    # Tracked for upstream patch: services/Api/src/shared/infrastructure/MultiDatabasePool.ts
+    # DB_CONNECTION_LIMIT: "10"
     # CONTENT_ROOT: ""             # Public base URL for uploaded files (required when FILE_STORE=S3)
     # MAIL_SYSTEM: ""              # SES (AWS Simple Email Service) or empty to disable
     # AI_PROVIDER: "openrouter"    # openrouter | openai

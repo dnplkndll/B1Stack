@@ -16,7 +16,7 @@ import { check } from 'k6';
 // ── Environment (override with --env flags) ──────────────────────────────────
 export const BASE_URL    = __ENV.BASE_URL    || 'http://localhost:8084';
 export const TEST_EMAIL  = __ENV.TEST_EMAIL  || 'demo@b1.church';
-export const TEST_PW     = __ENV.TEST_PW     || 'password';
+export const TEST_PW     = __ENV.TEST_PW     || 'TestPass123!';
 export const CHURCH_SLUG = __ENV.CHURCH_SLUG || 'grace';
 
 // ── Known IDs (from initdb demo data — change if using a different DB) ───────
