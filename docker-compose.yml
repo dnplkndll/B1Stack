@@ -1,5 +1,6 @@
 services:
-  # ─── Database ──────────────────────────────────────────────────────────────
+  # ─── Database (MySQL — default) ────────────────────────────────────────────
+  # Runs by default (no profiles key). For PG-only, use: docker compose --profile postgres up
   mysql:
     image: mysql:8.0
     environment:
@@ -13,6 +14,27 @@ services:
       - ./mysql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-b1stack_root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ─── Database (PostgreSQL — opt-in via --profile postgres) ─────────────────
+  postgres:
+    image: postgres:17-alpine
+    profiles:
+      - postgres
+    environment:
+      POSTGRES_USER: ${PG_USER:-b1stack}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-b1stack_pass}
+      POSTGRES_DB: b1stack
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-b1stack} -d b1stack"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -45,8 +67,8 @@ services:
       - "8087:8087"
     volumes:
       - ./services/Api/src:/app/src:cached
-      - ./services/Api/tools:/app/tools:cached
-      - ./services/Api/config:/app/config:cached
+      - ./services/Api/jest.integration.config.cjs:/app/jest.integration.config.cjs:cached
+      - ./services/Api/tsconfig.test.json:/app/tsconfig.test.json:cached
       - api_node_modules:/app/node_modules
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8084/"]
@@ -57,14 +79,16 @@ services:
     environment:
       ENVIRONMENT: dev
       SERVER_PORT: 8084
-      # Database connections — use root for full DDL access during initdb
-      MEMBERSHIP_CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/membership
-      ATTENDANCE_CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/attendance
-      CONTENT_CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/content
-      GIVING_CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/giving
-      MESSAGING_CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/messaging
-      DOING_CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/doing
-      REPORTING_CONNECTION_STRING: mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/reporting
+      DB_DIALECT: ${DB_DIALECT:-mysql}
+      # Database connections — MySQL (default) or PostgreSQL (when DB_DIALECT=postgres)
+      # MySQL: use root for full DDL access during initdb
+      MEMBERSHIP_CONNECTION_STRING: ${MEMBERSHIP_CONNECTION_STRING:-mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/membership}
+      ATTENDANCE_CONNECTION_STRING: ${ATTENDANCE_CONNECTION_STRING:-mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/attendance}
+      CONTENT_CONNECTION_STRING: ${CONTENT_CONNECTION_STRING:-mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/content}
+      GIVING_CONNECTION_STRING: ${GIVING_CONNECTION_STRING:-mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/giving}
+      MESSAGING_CONNECTION_STRING: ${MESSAGING_CONNECTION_STRING:-mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/messaging}
+      DOING_CONNECTION_STRING: ${DOING_CONNECTION_STRING:-mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/doing}
+      REPORTING_CONNECTION_STRING: ${REPORTING_CONNECTION_STRING:-mysql://root:${MYSQL_ROOT_PASSWORD:-b1stack_root}@mysql:3306/reporting}
       # WebSocket
       SOCKET_PORT: 8087
       SOCKET_URL: ws://localhost:8087
@@ -214,6 +238,7 @@ services:
 
 volumes:
   mysql_data:
+  pg_data:
   api_node_modules:
   b1admin_node_modules:
   b1app_node_modules:

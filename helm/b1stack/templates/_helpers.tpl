@@ -120,9 +120,10 @@ Usage: include "b1stack.autoSecret" (list . "secretName" "key" 24)
 {{/*
 Resolve a DB connection string.
 Usage: include "b1stack.connStr" (list "membership" . .Values.api.secrets.MEMBERSHIP_CONNECTION_STRING)
-  - When mysql.enabled=true and no manual override, auto-computes from mysql.auth values.
-  - Manual override (even empty string skipped; use "mysql://..." to override).
-  - When mysql.enabled=false, the explicit value is required.
+  - Manual override wins when non-empty.
+  - When mysql.enabled=true: auto-derive mysql:// URL from mysql.auth values.
+  - When cnpg.enabled=true: auto-derive postgresql:// URL from cnpg.auth values.
+  - Otherwise: explicit value required.
 */}}
 {{- define "b1stack.connStr" -}}
 {{- $module   := index . 0 -}}
@@ -130,6 +131,22 @@ Usage: include "b1stack.connStr" (list "membership" . .Values.api.secrets.MEMBER
 {{- $override := index . 2 -}}
 {{- if $override -}}
   {{- $override -}}
+{{- else if $ctx.Values.cnpg.enabled -}}
+  {{- $pw := $ctx.Values.cnpg.auth.password -}}
+  {{- if not $pw -}}
+    {{- $pgSecret := lookup "v1" "Secret" $ctx.Release.Namespace (printf "%s-pg-auth" $ctx.Release.Name) -}}
+    {{- if and $pgSecret (hasKey $pgSecret.data "password") -}}
+      {{- $pw = index $pgSecret.data "password" | b64dec -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $pw -}}
+    {{- fail "cnpg.auth.password is empty and the pg-auth secret was not found. Set cnpg.auth.password." -}}
+  {{- end -}}
+  {{- printf "postgresql://%s:%s@%s-pg-rw:5432/%s"
+        $ctx.Values.cnpg.auth.username
+        $pw
+        $ctx.Release.Name
+        $ctx.Values.cnpg.database -}}
 {{- else if $ctx.Values.mysql.enabled -}}
   {{- $pw := $ctx.Values.mysql.auth.password -}}
   {{- if not $pw -}}
@@ -147,6 +164,6 @@ Usage: include "b1stack.connStr" (list "membership" . .Values.api.secrets.MEMBER
         $ctx.Release.Name
         $module -}}
 {{- else -}}
-  {{- required (printf "api.secrets.%s_CONNECTION_STRING is required when mysql.enabled=false" (upper $module)) $override -}}
+  {{- required (printf "api.secrets.%s_CONNECTION_STRING is required when mysql.enabled=false and cnpg.enabled=false" (upper $module)) $override -}}
 {{- end -}}
 {{- end }}

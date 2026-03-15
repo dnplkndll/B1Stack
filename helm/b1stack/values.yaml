@@ -1,5 +1,9 @@
 # B1Stack Helm umbrella chart values
 
+# Database dialect: "mysql" (default) or "postgres" (opt-in).
+# When postgres: set cnpg.enabled=true and mysql.enabled=false.
+dbDialect: mysql
+
 # Bundled MySQL (official mysql:8.0 image — no Bitnami dependency).
 # Set mysql.enabled: false to use an external MySQL / managed DB (Cloud SQL, RDS, etc.)
 # and supply connection strings via api.secrets.*_CONNECTION_STRING at deploy time.
@@ -66,6 +70,43 @@ mysql:
       cpu: 1000m
       memory: 1Gi
 
+# CloudNativePG cluster (opt-in — set dbDialect=postgres and cnpg.enabled=true).
+# Requires the CNPG operator to be installed in the cluster first:
+#   kubectl apply --server-side -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.25/releases/cnpg-1.25.1.yaml
+cnpg:
+  enabled: false
+  instances: 2
+  image: ghcr.io/cloudnative-pg/postgresql:17.6
+  database: b1stack
+  auth:
+    username: b1stack
+    password: ""   # required — set via --set cnpg.auth.password=<PG_PW>
+  storage:
+    size: 10Gi
+    storageClass: ""
+  postgresql:
+    parameters:
+      shared_buffers: "256MB"
+      max_connections: "200"
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  # Schemas created on bootstrap (postInitSQL)
+  schemas:
+    - membership
+    - attendance
+    - content
+    - giving
+    - messaging
+    - doing
+    - reporting
+    - lessons
+    - askapi
+
 global:
   # Set baseDomain to auto-derive all service hostnames and enable ingress.
   # Hostnames use dash separators for wildcard cert compatibility:
@@ -123,6 +164,7 @@ api:
     targetCPUUtilizationPercentage: 60
     targetMemoryUtilizationPercentage: 80
   env:
+    # DB_DIALECT is auto-set from top-level dbDialect value
     ENVIRONMENT: production        # dev | staging | production — selects config/<env>.json defaults
     CORS_ORIGIN: "*"               # Restrict to your domains in production
     FILE_STORE: disk               # disk (ephemeral pod storage) | S3 (AWS S3 / GCS via S3-compat API)
@@ -189,9 +231,9 @@ api:
   affinity: {}
 
 # B1Admin (church staff dashboard — React SPA served by nginx)
-# NOTE: REACT_APP_* env vars are baked into the JS bundle at build time by Vite.
-# The image already contains the API URLs for the environment it was built for.
-# Runtime env (this section) has no effect on those URLs.
+# Images are built with __B1_*__ sentinel placeholders. At container start, the
+# entrypoint script replaces them with the REACT_APP_* env vars below.
+# This makes a single image deployable to any environment without rebuilding.
 b1admin:
   enabled: true
   replicaCount: 1
@@ -221,8 +263,21 @@ b1admin:
     maxReplicas: 5
     targetCPUUtilizationPercentage: 60
     targetMemoryUtilizationPercentage: 80
-  env:
-    REACT_APP_STAGE: production
+  env: {}
+    # Runtime API URLs — injected via entrypoint sed replacement.
+    # When empty, falls back to staging.churchapps.org defaults.
+    # Override per-environment in values.<env>.yaml:
+    # REACT_APP_MEMBERSHIP_API: "https://api.example.com/membership"
+    # REACT_APP_ATTENDANCE_API: "https://api.example.com/attendance"
+    # REACT_APP_GIVING_API: "https://api.example.com/giving"
+    # REACT_APP_REPORTING_API: "https://api.example.com/reporting"
+    # REACT_APP_MESSAGING_API: "https://api.example.com/messaging"
+    # REACT_APP_MESSAGING_API_SOCKET: "wss://api.example.com"
+    # REACT_APP_CONTENT_API: "https://api.example.com/content"
+    # REACT_APP_DOING_API: "https://api.example.com/doing"
+    # REACT_APP_CONTENT_ROOT: "https://example.com"
+    # REACT_APP_B1_ROOT: "https://example.com"
+    # REACT_APP_B1ADMIN_ROOT: "https://admin.example.com"
   podAnnotations: {}
   imagePullSecrets: []
   nodeSelector: {}
@@ -230,6 +285,7 @@ b1admin:
   affinity: {}
 
 # B1App (public church website / member portal — Next.js SSR)
+# Same sentinel-replacement pattern as B1Admin — single image, runtime URLs.
 b1app:
   enabled: true
   replicaCount: 1
@@ -259,8 +315,10 @@ b1app:
     maxReplicas: 10
     targetCPUUtilizationPercentage: 60
     targetMemoryUtilizationPercentage: 80
-  env:
-    NEXT_STAGE: production
+  env: {}
+    # Runtime API URLs — same as B1Admin but with NEXT_PUBLIC_* prefix.
+    # NEXT_PUBLIC_MEMBERSHIP_API: "https://api.example.com/membership"
+    # ...etc
   podAnnotations: {}
   imagePullSecrets: []
   nodeSelector: {}

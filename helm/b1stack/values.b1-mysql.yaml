@@ -1,0 +1,82 @@
+# B1-MySQL environment — MySQL backend on hz.ledoweb.com
+# Namespace: b1-mysql
+#
+# Deploy:
+#   helm upgrade --install b1mysql helm/b1stack \
+#     --kube-context hetzner-ledo --namespace b1-mysql --create-namespace \
+#     -f helm/b1stack/values.yaml -f helm/b1stack/values.b1-mysql.yaml \
+#     --wait --timeout 10m
+
+dbDialect: mysql
+
+global:
+  baseDomain: b1-mysql.hz.ledoweb.com
+  ingress:
+    clusterIssuer: letsencrypt-prod
+
+mysql:
+  enabled: true
+  persistence:
+    storageClass: hcloud-volumes
+    size: 10Gi
+  # Sized for 50 concurrent users (A/B comparison target)
+  maxConnections: 100
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+api:
+  ingress:
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  env:
+    ENVIRONMENT: dev
+    SERVER_PORT: "8084"
+    SOCKET_PORT: "8087"
+    SOCKET_URL: "ws://b1mysql-api:8087"
+    CORS_ORIGIN: "*"
+    FILE_STORE: disk
+    DELIVERY_PROVIDER: local
+    DB_CONNECTION_LIMIT: "15"
+
+b1admin:
+  env:
+    REACT_APP_MEMBERSHIP_API: "https://api-b1-mysql.hz.ledoweb.com/membership"
+    REACT_APP_ATTENDANCE_API: "https://api-b1-mysql.hz.ledoweb.com/attendance"
+    REACT_APP_GIVING_API: "https://api-b1-mysql.hz.ledoweb.com/giving"
+    REACT_APP_REPORTING_API: "https://api-b1-mysql.hz.ledoweb.com/reporting"
+    REACT_APP_MESSAGING_API: "https://api-b1-mysql.hz.ledoweb.com/messaging"
+    REACT_APP_MESSAGING_API_SOCKET: "wss://api-b1-mysql.hz.ledoweb.com"
+    REACT_APP_CONTENT_API: "https://api-b1-mysql.hz.ledoweb.com/content"
+    REACT_APP_DOING_API: "https://api-b1-mysql.hz.ledoweb.com/doing"
+    REACT_APP_LESSONS_API: "https://api-b1-mysql.hz.ledoweb.com/lessons"
+    REACT_APP_CONTENT_ROOT: "https://b1-mysql.hz.ledoweb.com"
+    REACT_APP_B1_ROOT: "https://b1-mysql.hz.ledoweb.com"
+    REACT_APP_B1ADMIN_ROOT: "https://admin-b1-mysql.hz.ledoweb.com"
+
+b1app:
+  env:
+    NEXT_STAGE: dev
+    NEXT_PUBLIC_MEMBERSHIP_API: "https://api-b1-mysql.hz.ledoweb.com/membership"
+    NEXT_PUBLIC_ATTENDANCE_API: "https://api-b1-mysql.hz.ledoweb.com/attendance"
+    NEXT_PUBLIC_GIVING_API: "https://api-b1-mysql.hz.ledoweb.com/giving"
+    NEXT_PUBLIC_REPORTING_API: "https://api-b1-mysql.hz.ledoweb.com/reporting"
+    NEXT_PUBLIC_MESSAGING_API: "https://api-b1-mysql.hz.ledoweb.com/messaging"
+    NEXT_PUBLIC_MESSAGING_API_SOCKET: "wss://api-b1-mysql.hz.ledoweb.com"
+    NEXT_PUBLIC_CONTENT_API: "https://api-b1-mysql.hz.ledoweb.com/content"
+    NEXT_PUBLIC_DOING_API: "https://api-b1-mysql.hz.ledoweb.com/doing"
+    NEXT_PUBLIC_LESSONS_API: "https://api-b1-mysql.hz.ledoweb.com/lessons"
+    NEXT_PUBLIC_CONTENT_ROOT: "https://b1-mysql.hz.ledoweb.com"
+    NEXT_PUBLIC_B1_ROOT: "https://b1-mysql.hz.ledoweb.com"
+    NEXT_PUBLIC_B1ADMIN_ROOT: "https://admin-b1-mysql.hz.ledoweb.com"
+
+lessonsapi:
+  enabled: false
+
+askapi:
+  enabled: false

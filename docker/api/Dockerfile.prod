@@ -10,8 +10,9 @@ RUN npm run build:prod
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-# mysql-client: used by the Helm initdb Job (initdb.sh) to create DB schemas on first deploy.
-RUN apk add --no-cache mysql-client
+# mysql-client + postgresql-client: used by the Helm initdb Job (initdb.sh) to create DB schemas.
+# Both installed so a single image supports either DB_DIALECT=mysql or DB_DIALECT=postgres.
+RUN apk add --no-cache mysql-client postgresql-client
 COPY services/Api/package.json services/Api/package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist

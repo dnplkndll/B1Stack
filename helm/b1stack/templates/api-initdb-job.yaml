@@ -1,4 +1,4 @@
-{{- if and .Values.api.enabled .Values.mysql.enabled .Values.initdb.enabled }}
+{{- if and .Values.api.enabled .Values.initdb.enabled (or .Values.mysql.enabled .Values.cnpg.enabled) }}
 # Helm hook Job: runs DB schema initialisation after every install or upgrade.
 # Uses the API image (which contains tools/dbScripts/*.sql and docker/api/initdb.sh).
 # Safe to re-run: SQL scripts use DROP TABLE IF EXISTS + CREATE TABLE.
@@ -37,6 +37,9 @@ spec:
           imagePullPolicy: {{ .Values.api.image.pullPolicy }}
           command: ["/bin/sh", "/app/initdb.sh"]
           env:
+            - name: DB_DIALECT
+              value: {{ .Values.dbDialect | quote }}
+            {{- if .Values.mysql.enabled }}
             - name: MYSQL_HOST
               value: {{ .Release.Name }}-mysql
             - name: MYSQL_USER
@@ -48,6 +51,22 @@ spec:
                 secretKeyRef:
                   name: {{ .Release.Name }}-mysql
                   key: mysql-password
+            {{- end }}
+            {{- if .Values.cnpg.enabled }}
+            - name: PG_HOST
+              value: {{ .Release.Name }}-pg-rw
+            - name: PG_USER
+              value: {{ .Values.cnpg.auth.username | quote }}
+            - name: PG_PORT
+              value: "5432"
+            - name: PG_DATABASE
+              value: {{ .Values.cnpg.database | quote }}
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-pg-auth
+                  key: password
+            {{- end }}
           resources:
             requests:
               cpu: 50m
