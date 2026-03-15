@@ -84,7 +84,7 @@ CALL seed_large_people();
 DROP PROCEDURE IF EXISTS seed_large_people;
 
 -- ── Services (3 weekend + midweek + satellite campus) ───────────────────────
-INSERT IGNORE INTO services (id, churchId, name)
+INSERT IGNORE INTO attendance.services (id, churchId, name)
 VALUES
   ('LSVC0000001', 'CHU00000002', 'Saturday Evening'),
   ('LSVC0000002', 'CHU00000002', 'Sunday 8am'),

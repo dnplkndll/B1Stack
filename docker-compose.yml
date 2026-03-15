@@ -67,6 +67,8 @@ services:
       - "8087:8087"
     volumes:
       - ./services/Api/src:/app/src:cached
+      - ./services/Api/tools:/app/tools:cached
+      - ./services/Api/drizzle:/app/drizzle:cached
       - ./services/Api/jest.integration.config.cjs:/app/jest.integration.config.cjs:cached
       - ./services/Api/tsconfig.test.json:/app/tsconfig.test.json:cached
       - api_node_modules:/app/node_modules
