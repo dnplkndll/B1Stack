@@ -62,8 +62,8 @@ FROM generate_series(1, 5000) AS i
 ON CONFLICT (id) DO NOTHING;
 
 -- ── Services (3 weekend + midweek + satellite campus) ───────────────────────
--- Note: services table is in the attendance schema, accessed via the same DB in PG
-INSERT INTO services (id, "churchId", name)
+-- services table is in the attendance schema
+INSERT INTO attendance.services (id, "churchId", name)
 VALUES
   ('LSVC0000001', 'CHU00000002', 'Saturday Evening'),
   ('LSVC0000002', 'CHU00000002', 'Sunday 8am'),
@@ -87,7 +87,20 @@ SELECT
 FROM generate_series(1, 80) AS i
 ON CONFLICT (id) DO NOTHING;
 
+-- ── Group memberships (~2,000 members across 80 groups, avg 25/group) ─────
+INSERT INTO "groupMembers" (id, "churchId", "groupId", "personId", leader, "joinDate")
+SELECT
+  LPAD('LGM' || i::text, 11, '0'),
+  'CHU00000002',
+  LPAD('LGRP' || (1 + (i % 80))::text, 11, '0'),
+  LPAD('LPER' || i::text, 11, '0'),
+  CASE WHEN i % 25 = 0 THEN true ELSE false END,
+  CURRENT_DATE - (RANDOM() * 365)::int
+FROM generate_series(1, 2000) AS i
+ON CONFLICT (id) DO NOTHING;
+
 SELECT 'Large church seed complete' AS status,
   (SELECT COUNT(*) FROM people WHERE "churchId"='CHU00000002') AS people,
   (SELECT COUNT(*) FROM households WHERE "churchId"='CHU00000002') AS households,
-  (SELECT COUNT(*) FROM groups WHERE "churchId"='CHU00000002') AS grps;
+  (SELECT COUNT(*) FROM groups WHERE "churchId"='CHU00000002') AS grps,
+  (SELECT COUNT(*) FROM "groupMembers" WHERE "churchId"='CHU00000002') AS members;
