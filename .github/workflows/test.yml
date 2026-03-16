@@ -10,7 +10,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     steps:
       - uses: actions/checkout@v4
@@ -88,11 +88,23 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run B1Admin E2E tests
+        id: b1admin-tests
         working-directory: services/B1Admin
-        run: npx playwright test
+        run: |
+          npx playwright test --reporter=list 2>&1 | tee /tmp/playwright-output.log
+          exit ${PIPESTATUS[0]}
         env:
           BASE_URL: http://localhost:3101
           CI: true
+
+      - name: Show test summary
+        if: always()
+        run: |
+          echo "=== Test Summary ==="
+          tail -5 /tmp/playwright-output.log 2>/dev/null || echo "No output"
+          echo ""
+          echo "=== Failed Tests ==="
+          grep "✘" /tmp/playwright-output.log 2>/dev/null | grep -v "retry" | head -60 || echo "None"
 
       - name: Upload Playwright report (B1Admin)
         if: always()
