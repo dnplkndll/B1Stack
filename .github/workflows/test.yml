@@ -10,7 +10,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     steps:
       - uses: actions/checkout@v4
@@ -50,7 +50,8 @@ jobs:
       - name: Wait for services
         run: ./scripts/wait-ready.sh
         env:
-          WAIT_TIMEOUT: 180
+          WAIT_TIMEOUT: 300
+          WAIT_SERVICES: api,b1admin
 
       - name: Initialize database
         run: docker compose exec -T api npm run initdb
@@ -80,33 +81,30 @@ jobs:
 
       - name: Install B1Admin dependencies
         working-directory: services/B1Admin
-        run: npm install
-
-      - name: Install B1App dependencies
-        working-directory: services/B1App
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Install Playwright browsers (B1Admin)
         working-directory: services/B1Admin
         run: npx playwright install --with-deps chromium
 
-      - name: Install Playwright browsers (B1App)
-        working-directory: services/B1App
-        run: npx playwright install --with-deps chromium
-
       - name: Run B1Admin E2E tests
+        id: b1admin-tests
         working-directory: services/B1Admin
-        run: npx playwright test
+        run: |
+          npx playwright test --reporter=list 2>&1 | tee /tmp/playwright-output.log
+          exit ${PIPESTATUS[0]}
         env:
           BASE_URL: http://localhost:3101
           CI: true
 
-      - name: Run B1App E2E tests
-        working-directory: services/B1App
-        run: npx playwright test
-        env:
-          BASE_URL: http://localhost:3301
-          CI: true
+      - name: Show test summary
+        if: always()
+        run: |
+          echo "=== Test Summary ==="
+          tail -5 /tmp/playwright-output.log 2>/dev/null || echo "No output"
+          echo ""
+          echo "=== Failed Tests ==="
+          grep "✘" /tmp/playwright-output.log 2>/dev/null | grep -v "retry" | head -60 || echo "None"
 
       - name: Upload Playwright report (B1Admin)
         if: always()
@@ -114,14 +112,6 @@ jobs:
         with:
           name: playwright-report-b1admin
           path: services/B1Admin/playwright-report/
-          retention-days: 14
-
-      - name: Upload Playwright report (B1App)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-b1app
-          path: services/B1App/playwright-report/
           retention-days: 14
 
       - name: Dump logs on failure

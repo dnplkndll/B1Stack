@@ -34,7 +34,7 @@
   target: aggregated
   merges:
     - upstream main
-    - origin feat/playwright-e2e-tests
+    - origin feat/playwright-e2e-clean
 
 ./services/B1App:
   remotes:
@@ -43,6 +43,7 @@
   target: aggregated
   merges:
     - upstream main
+    - origin fix/missing-vendor-css
     - origin feat/playwright-e2e-tests
 
 ./services/LessonsApi:

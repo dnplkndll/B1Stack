@@ -4,12 +4,33 @@ set -euo pipefail
 TIMEOUT=${WAIT_TIMEOUT:-120}
 INTERVAL=3
 
-NAMES=("Api" "B1Admin" "B1App")
-URLS=("http://localhost:8084" "http://localhost:3101" "http://localhost:3301")
+ALL_NAMES=("api" "b1admin" "b1app")
+ALL_URLS=("http://localhost:8084" "http://localhost:3101" "http://localhost:3301")
+ALL_LABELS=("Api" "B1Admin" "B1App")
 
 if [ "${1:-}" = "--full" ]; then
-  NAMES=("Api" "B1Admin" "B1App" "LessonsApi" "AskApi")
-  URLS=("http://localhost:8084/membership/churches" "http://localhost:3101" "http://localhost:3301" "http://localhost:8090" "http://localhost:8097")
+  ALL_NAMES=("api" "b1admin" "b1app" "lessonsapi" "askapi")
+  ALL_URLS=("http://localhost:8084/membership/churches" "http://localhost:3101" "http://localhost:3301" "http://localhost:8090" "http://localhost:8097")
+  ALL_LABELS=("Api" "B1Admin" "B1App" "LessonsApi" "AskApi")
+fi
+
+# WAIT_SERVICES env var: comma-separated list of services to wait for (default: all)
+NAMES=()
+URLS=()
+if [ -n "${WAIT_SERVICES:-}" ]; then
+  IFS=',' read -ra FILTER <<< "$WAIT_SERVICES"
+  for f in "${FILTER[@]}"; do
+    f=$(echo "$f" | tr '[:upper:]' '[:lower:]' | xargs)
+    for idx in "${!ALL_NAMES[@]}"; do
+      if [ "${ALL_NAMES[$idx]}" = "$f" ]; then
+        NAMES+=("${ALL_LABELS[$idx]}")
+        URLS+=("${ALL_URLS[$idx]}")
+      fi
+    done
+  done
+else
+  NAMES=("${ALL_LABELS[@]}")
+  URLS=("${ALL_URLS[@]}")
 fi
 
 total=${#NAMES[@]}
