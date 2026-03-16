@@ -51,6 +51,7 @@ jobs:
         run: ./scripts/wait-ready.sh
         env:
           WAIT_TIMEOUT: 300
+          WAIT_SERVICES: api,b1admin
 
       - name: Initialize database
         run: docker compose exec -T api npm run initdb
