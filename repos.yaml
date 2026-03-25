@@ -25,7 +25,7 @@
   target: aggregated
   merges:
     - upstream main
-    - origin feat/drizzle-orm
+    - origin feat/kysely-orm
 
 ./services/B1Admin:
   remotes:
@@ -34,7 +34,6 @@
   target: aggregated
   merges:
     - upstream main
-    - origin feat/playwright-e2e-clean
 
 ./services/B1App:
   remotes:
