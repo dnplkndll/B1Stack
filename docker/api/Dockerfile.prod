@@ -18,7 +18,6 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY services/Api/config/ ./config/
 COPY services/Api/tools/ ./tools/
-COPY services/Api/drizzle/ ./drizzle/
 COPY docker/api/initdb.sh ./initdb.sh
 EXPOSE 8084 8087
 CMD ["node", "dist/index.js"]
