@@ -24,6 +24,13 @@ cnpg:
   storage:
     size: 10Gi
     storageClass: hcloud-volumes
+  backup:
+    enabled: true
+    endpointURL: "https://fsn1.your-objectstorage.com"
+    destinationPath: "s3://ledo-backups/b1stack/b1-postgres"
+    s3CredentialsSecret: aws-s3-credentials
+    retentionPolicy: "30d"
+    schedule: "0 2 * * *"
   # Sized to match MySQL environment for fair A/B comparison
   postgresql:
     parameters:

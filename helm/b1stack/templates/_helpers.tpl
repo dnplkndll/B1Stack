@@ -146,7 +146,7 @@ Usage: include "b1stack.connStr" (list "membership" . .Values.api.secrets.MEMBER
         $ctx.Values.cnpg.auth.username
         $pw
         $ctx.Release.Name
-        $ctx.Values.cnpg.database -}}
+        $module -}}
 {{- else if $ctx.Values.mysql.enabled -}}
   {{- $pw := $ctx.Values.mysql.auth.password -}}
   {{- if not $pw -}}

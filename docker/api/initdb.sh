@@ -1,6 +1,7 @@
 #!/bin/sh
 # B1Stack database initialisation script.
-# Runs all SQL scripts in tools/dbScripts/ against the bundled database instance.
+# Applies DDL from tools/dbScripts/ (MySQL) or tools/dbScripts/pg/ (PostgreSQL).
+# Loads stored procedures + demo data from tools/dbScripts/.
 #
 # Supports both MySQL and PostgreSQL based on DB_DIALECT env var.
 #
@@ -20,6 +21,7 @@
 set -e
 
 DIALECT="${DB_DIALECT:-mysql}"
+MODULES="membership attendance content giving messaging doing"
 
 if [ "$DIALECT" = "postgres" ] || [ "$DIALECT" = "postgresql" ] || [ "$DIALECT" = "pg" ]; then
   # ─── PostgreSQL mode ─────────────────────────────────────────────────────
@@ -34,11 +36,11 @@ if [ "$DIALECT" = "postgres" ] || [ "$DIALECT" = "postgresql" ] || [ "$DIALECT" 
   fi
 
   export PGPASSWORD="$PG_PASSWORD"
-  CMD="psql -h $HOST -p $PORT -U $USER -d $DATABASE"
+  BASECMD="psql -h $HOST -p $PORT -U $USER"
 
   echo "Waiting for PostgreSQL at $HOST:$PORT ..."
   i=0
-  until $CMD -c "SELECT 1" >/dev/null 2>&1; do
+  until $BASECMD -d $DATABASE -c "SELECT 1" >/dev/null 2>&1; do
     i=$((i + 1))
     if [ $i -ge 60 ]; then
       echo "ERROR: PostgreSQL not ready after 5 minutes." >&2
@@ -49,21 +51,42 @@ if [ "$DIALECT" = "postgres" ] || [ "$DIALECT" = "postgresql" ] || [ "$DIALECT" 
   done
   echo "PostgreSQL is ready."
 
-  for module in membership attendance content giving messaging doing reporting; do
-    dir="/app/tools/dbScripts/$module"
-    [ -d "$dir" ] || continue
+  for module in $MODULES; do
     echo "Initialising module: $module"
-    # Ensure schema exists and set search_path
-    $CMD -c "CREATE SCHEMA IF NOT EXISTS $module" 2>/dev/null || true
-    for sql_file in "$dir"/*.sql; do
-      [ -f "$sql_file" ] || continue
-      # Skip MySQL stored procedure files on PG
-      if grep -qi "DELIMITER\|CREATE PROCEDURE\|CREATE DEFINER" "$sql_file" 2>/dev/null; then
-        echo "  Skipping MySQL procedure: $(basename "$sql_file")"
-        continue
-      fi
-      PGOPTIONS="-c search_path=$module,public" $CMD -f "$sql_file" 2>&1 | grep -v "NOTICE" || true
-    done
+
+    # Ensure per-module database exists (mirrors MySQL layout)
+    $BASECMD -d $DATABASE -c "SELECT 1 FROM pg_database WHERE datname = '$module'" | grep -q 1 || \
+      $BASECMD -d $DATABASE -c "CREATE DATABASE $module OWNER $USER" 2>&1 | grep -v "NOTICE" || true
+
+    CMD="$BASECMD -d $module"
+
+    # Apply PG DDL files (CREATE TABLE statements)
+    ddl_dir="/app/tools/dbScripts/pg/$module"
+    if [ -d "$ddl_dir" ]; then
+      for sql_file in "$ddl_dir"/*.sql; do
+        [ -f "$sql_file" ] || continue
+        base=$(basename "$sql_file")
+        # Skip stored procedure files (loaded separately below)
+        case "$base" in
+          cleanup.sql|deleteForChurch.sql|updateConversationStats.sql) continue ;;
+        esac
+        echo "  DDL: $base"
+        $CMD -f "$sql_file" 2>&1 | grep -v "NOTICE" || true
+      done
+
+      # Load PG stored functions
+      for sql_file in "$ddl_dir"/*.sql; do
+        [ -f "$sql_file" ] || continue
+        base=$(basename "$sql_file")
+        case "$base" in
+          cleanup.sql|deleteForChurch.sql|updateConversationStats.sql)
+            echo "  Function: $base"
+            $CMD -f "$sql_file" 2>&1 | grep -v "NOTICE" || true
+            ;;
+        esac
+      done
+    fi
+
     echo "  done."
   done
 
@@ -93,14 +116,38 @@ else
   done
   echo "MySQL is ready."
 
-  for module in membership attendance content giving messaging doing reporting; do
-    dir="/app/tools/dbScripts/$module"
-    [ -d "$dir" ] || continue
+  for module in $MODULES; do
     echo "Initialising module: $module"
-    for sql_file in "$dir"/*.sql; do
-      [ -f "$sql_file" ] || continue
-      $CMD --force "$module" < "$sql_file" 2>&1 | grep -v "Warning" || true
-    done
+    # Ensure database exists
+    $CMD -e "CREATE DATABASE IF NOT EXISTS \`$module\`" 2>&1 | grep -v "Warning" || true
+
+    # Apply MySQL DDL files (CREATE TABLE statements)
+    ddl_dir="/app/tools/dbScripts/$module"
+    if [ -d "$ddl_dir" ]; then
+      for sql_file in "$ddl_dir"/*.sql; do
+        [ -f "$sql_file" ] || continue
+        base=$(basename "$sql_file")
+        # Skip stored procedure files and demo data (loaded separately)
+        case "$base" in
+          cleanup.sql|deleteForChurch.sql|updateConversationStats.sql|*demo*) continue ;;
+        esac
+        echo "  DDL: $base"
+        $CMD --force "$module" < "$sql_file" 2>&1 | grep -v "Warning" || true
+      done
+
+      # Load stored procedures (MySQL only)
+      for sql_file in "$ddl_dir"/*.sql; do
+        [ -f "$sql_file" ] || continue
+        base=$(basename "$sql_file")
+        case "$base" in
+          cleanup.sql|deleteForChurch.sql|updateConversationStats.sql)
+            echo "  Procedure: $base"
+            $CMD --force "$module" < "$sql_file" 2>&1 | grep -v "Warning" || true
+            ;;
+        esac
+      done
+    fi
+
     echo "  done."
   done
 fi
