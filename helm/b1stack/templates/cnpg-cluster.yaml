@@ -41,6 +41,28 @@ spec:
 
   resources:
     {{- toYaml .Values.cnpg.resources | nindent 4 }}
+
+  {{- if .Values.cnpg.backup }}
+  {{- if .Values.cnpg.backup.enabled }}
+  backup:
+    barmanObjectStore:
+      endpointURL: {{ .Values.cnpg.backup.endpointURL | quote }}
+      destinationPath: {{ .Values.cnpg.backup.destinationPath | quote }}
+      s3Credentials:
+        accessKeyId:
+          name: {{ .Values.cnpg.backup.s3CredentialsSecret | default "aws-s3-credentials" }}
+          key: AWS_ACCESS_KEY_ID
+        secretAccessKey:
+          name: {{ .Values.cnpg.backup.s3CredentialsSecret | default "aws-s3-credentials" }}
+          key: AWS_SECRET_ACCESS_KEY
+      wal:
+        compression: gzip
+      data:
+        compression: gzip
+        immediateCheckpoint: true
+    retentionPolicy: {{ .Values.cnpg.backup.retentionPolicy | default "30d" | quote }}
+  {{- end }}
+  {{- end }}
 ---
 apiVersion: v1
 kind: Secret
@@ -55,4 +77,25 @@ type: kubernetes.io/basic-auth
 stringData:
   username: {{ .Values.cnpg.auth.username | quote }}
   password: {{ .Values.cnpg.auth.password | quote }}
+{{- if .Values.cnpg.backup }}
+{{- if .Values.cnpg.backup.enabled }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: {{ .Release.Name }}-pg-daily
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}-pg
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: Helm
+spec:
+  schedule: {{ .Values.cnpg.backup.schedule | default "0 2 * * *" | quote }}
+  method: barmanObjectStore
+  backupOwnerReference: self
+  immediate: true
+  cluster:
+    name: {{ .Release.Name }}-pg
+{{- end }}
+{{- end }}
 {{- end }}
